@@ -4,118 +4,179 @@
 
 {% block head %}
     {{ super() }} <!-- Include base styles from layout.html -->
+    
+    <!-- Styles from the provided index.html file -->
     <style>
+        /* Reset (from index.html) */
+        /* We skip the body styles as layout.html handles the base body */
+
+        /* Login container (from index.html) */
         .login-container {
-            max-width: 400px;
-            margin: 2rem auto; /* Reduced top margin */
-            padding: 2.5rem;
-            background-color: #fff;
-            border-radius: 12px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            padding: 40px 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%; /* Make it responsive within the .container */
+            max-width: 380px; /* Max width */
             text-align: center;
+            animation: fadeInUp 1s ease forwards;
+            opacity: 0;
+            margin: 2rem auto; /* Center it within the main.container */
         }
-        .login-container .logo-icon { /* Optional: Add an icon if no image */
-            font-size: 3rem;
-            color: #0d6efd; /* Bootstrap blue */
-            margin-bottom: 1rem;
+
+        @keyframes fadeInUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
+
+        /* Logo (from index.html) */
+        .logo img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin-bottom: 15px;
+            object-fit: cover;
+        }
+
+        /* Title (from index.html) */
         .login-container h1 {
-            margin-bottom: 0.5rem;
-            color: #212529; /* Darker text */
-            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #222;
+            font-size: 24px;
         }
-        .login-container .subtitle {
-            color: #6c757d; /* Bootstrap muted */
-            margin-bottom: 2rem;
-            font-size: 1rem;
+
+        .login-container h1 i {
+            margin-right: 8px;
+            color: #4a90e2;
         }
+
+        .subtitle {
+            font-size: 14px;
+            margin-bottom: 25px;
+            color: #666;
+        }
+
+        /* Input group (from index.html) */
         .input-group {
-            margin-bottom: 1.25rem;
-            position: relative;
-            text-align: left; /* Align icon and input */
-        }
-        .input-group i {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #adb5bd; /* Lighter icon */
-            pointer-events: none; /* Make icon unclickable */
-        }
-        .input-group input {
-            width: 100%;
-            padding: 12px 12px 12px 40px; /* Adjusted padding for icon */
-            border: 1px solid #ced4da; /* Bootstrap border */
-            border-radius: 8px;
-            font-size: 1rem;
-            box-sizing: border-box; /* Include padding in width */
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-        .input-group input:focus {
-             border-color: #86b7fe; /* Focus color */
-             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); /* Focus shadow */
-             outline: none;
-        }
-        .options-group {
             display: flex;
-            justify-content: flex-end; /* Align link to the right */
-            align-items: center; /* Vertical alignment */
-            margin-top: -0.5rem; /* Pull up slightly */
-            margin-bottom: 1.5rem;
-            font-size: 0.9rem;
+            align-items: center;
+            background: #f0f0f5;
+            margin: 15px 0;
+            padding: 14px;
+            border-radius: 10px;
+            transition: box-shadow 0.3s, background-color 0.3s;
+            border: 1px solid transparent;
         }
-        .forgot-password-link a {
-            color: #0d6efd;
-            text-decoration: none;
+
+        .input-group:focus-within {
+            background: #fff;
+            border-color: #4a90e2;
+            box-shadow: 0 0 8px rgba(74, 144, 226, 0.2);
         }
-         .forgot-password-link a:hover {
-            text-decoration: underline;
-         }
-        .btn-login { /* Specific class for login button */
-            width: 100%;
-            padding: 12px;
-            background-color: #0d6efd;
-            color: white;
+
+        .input-group i {
+            margin-right: 12px;
+            color: #888;
+            transition: color 0.3s;
+        }
+
+        .input-group:focus-within i {
+            color: #4a90e2;
+        }
+
+        .input-group input {
+            flex: 1;
             border: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
+            background: transparent;
+            outline: none;
+            color: #333;
+            font-size: 15px;
+            width: 100%; /* Ensure it fills the flex container */
+        }
+
+        /* Link below password (from index.html) */
+        .forgot-password-link {
+            text-align: right;
+            margin-top: -10px;
+            margin-bottom: 15px;
+        }
+        
+        .forgot-password-link a {
+            font-size: 13px;
+            color: #4a90e2;
+            text-decoration: none;
+            transition: text-decoration 0.2s;
+        }
+
+        .forgot-password-link a:hover {
+            text-decoration: underline;
+        }
+
+        /* Button Styles (from index.html) */
+        .btn {
+            display: inline-block;
+            background: #4a90e2;
+            color: #fff;
+            padding: 14px 25px;
+            border-radius: 30px;
+            font-weight: bold;
+            border: none;
+            margin-top: 20px;
             cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.1s ease;
-        }
-        .btn-login:hover {
-            background-color: #0b5ed7;
-        }
-         .btn-login:active {
-            transform: scale(0.98); /* Click effect */
-        }
-        .signup-link {
-            margin-top: 2rem;
-            color: #6c757d;
-            font-size: 0.95rem;
-        }
-        .signup-link a {
-            color: #0d6efd;
-            font-weight: 600;
+            transition: background-color 0.3s, transform 0.2s;
+            width: 100%;
+            font-size: 16px;
             text-decoration: none;
         }
+
+        .btn:hover {
+            background: #357abd;
+            transform: translateY(-2px);
+        }
+
+        /* New Secondary Button for Teacher Signup (from index.html) */
+        .btn.btn-secondary {
+            background: #e9f2fc;
+            color: #357abd;
+            margin-top: 10px;
+        }
+
+        .btn.btn-secondary:hover {
+            background: #dbe8f8;
+        }
+
+        /* Signup link (from index.html) */
+        .signup-link {
+            margin-top: 25px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .signup-link a {
+            color: #4a90e2;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
         .signup-link a:hover {
             text-decoration: underline;
         }
-        /* Ensure flash messages have enough space */
-        .login-container .flash-messages {
-             margin-top: 1.5rem;
-             margin-bottom: 0; /* Reset margin if needed */
-        }
 
-        @media (max-width: 480px) {
-            .login-container {
-                padding: 1.5rem;
-                margin: 1rem;
-            }
-            .login-container h1 { font-size: 1.6rem; }
-            .input-group input { padding: 10px 10px 10px 35px; }
-            .btn-login { font-size: 1rem; padding: 10px; }
+        /* Flash messages need to fit in */
+        .login-container .flash-messages {
+             margin-top: 1rem;
+             margin-bottom: 0.5rem;
+             padding: 0;
+        }
+        .login-container .alert {
+            font-size: 0.9rem;
+            padding: 0.75rem 1rem;
         }
 
     </style>
@@ -123,9 +184,15 @@
 
 {% block content %}
 <div class="login-container">
-     <div class="logo-icon"><i class="fas fa-brain"></i></div> <!-- Simple Icon -->
-    <h1>Login</h1>
-    <p class="subtitle">Access your StellarMind Prod account</p>
+    <div class="logo">
+        <!-- Corrected path to use Flask's static folder -->
+        <img src="{{ url_for('static', filename='images/ttlogo.jpg') }}" 
+             alt="Stellar Mind Logo"
+             onerror="this.onerror=null; this.src='https://placehold.co/80x80/4a90e2/ffffff?text=SM';">
+    </div>
+    
+    <h1><i class="fa-solid fa-user-secret"></i> Welcome Back</h1>
+    <p class="subtitle">Login to explore your Stellar Mind</p>
 
     <!-- Display Flash Messages (moved inside container) -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -138,36 +205,40 @@
         {% endif %}
     {% endwith %}
 
+    <!-- Updated form to submit to Flask backend -->
     <form method="POST" action="{{ url_for('login_page') }}">
         <div class="input-group">
-            <input type="text" id="username" name="username" placeholder="Roll No / Username" required aria-label="Username or Roll Number">
-             <i class="fas fa-user"></i>
+            <i class="fas fa-user"></i>
+            <!-- Added 'name' attribute for Flask -->
+            <input type="text" id="username" name="username" placeholder="Institute Roll Number" required>
         </div>
+
         <div class="input-group">
-            <input type="password" id="password" name="password" placeholder="Password" required aria-label="Password">
-             <i class="fas fa-lock"></i>
+            <i class="fas fa-lock"></i>
+            <!-- Added 'name' attribute for Flask -->
+            <input type="password" id="password" name="password" placeholder="Password" required>
         </div>
-        <div class="options-group">
-             <span class="forgot-password-link">
-                <a href="{{ url_for('forgot_password_page') }}">Forgot Password?</a>
-             </span>
-        </div>
-        <button type="submit" class="btn-login">Login</button>
+        
+        <p class="forgot-password-link">
+            <!-- Updated href to use url_for -->
+            <a href="{{ url_for('forgot_password_page') }}">Forgot Password?</a>
+        </p>
+
+        <button type="submit" class="btn">Login</button>
+        <!-- Removed <p id="login-message"></p> as flash messages handle this -->
     </form>
 
     <p class="signup-link">
-        Don't have an account? <a href="{{ url_for('signup_page') }}">Sign Up</a>
-        <!-- Add Teacher signup link if needed -->
-        <!-- | <a href="{{ url_for('teacher_signup_page') }}">Teacher Signup</a> -->
+        <!-- Updated href to use url_for -->
+        Not registered yet? <a href="{{ url_for('signup_page') }}">Sign Up</a>
     </p>
+
+    <!-- Updated href to use url_for -->
+    <a href="{{ url_for('teacher_signup_page') }}" class="btn btn-secondary">Sign up as a Teacher</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
-    {{ super() }} <!-- Include base scripts from layout.html if any -->
-    <script>
-        // Minimal JS for potential future enhancements like show/hide password
-        // Login logic itself is handled by Flask.
-    </script>
+    {{ super() }} 
+    <!-- Removed the Supabase JS login script, as Flask handles the login -->
 {% endblock %}
-
