@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+    <title>Stellar Mind Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --transition-speed: 0.5s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-color);
+            transition: background var(--transition-speed);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 10%, rgba(66, 153, 225, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 90% 90%, rgba(0, 135, 197, 0.1) 0%, transparent 50%);
+            animation: pulseBackground 10s infinite alternate;
+            z-index: -1;
+        }
+
+        @keyframes pulseBackground {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            background: var(--secondary-bg);
+            padding: 1rem 1.5rem;
+            box-shadow: 0 4px 20px var(--shadow-light);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            transition: background var(--transition-speed), box-shadow var(--transition-speed);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .navbar.scrolled {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 25px var(--shadow-heavy);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: bold;
+            color: var(--text-color);
+            min-width: 12rem;
+        }
+
+        .logo-flipper {
+            position: relative;
+            width: 3rem;
+            height: 3rem;
+            cursor: pointer;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .logo-flipper.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .logo-image {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 1rem rgba(66, 153, 225, 0.5);
+            backface-visibility: hidden;
+            transition: box-shadow var(--transition-speed);
+            object-fit: cover;
+        }
+
+        .logo-image.front {
+            transform: rotateY(0deg);
+        }
+
+        .logo-image.back {
+            transform: rotateY(180deg);
+        }
+
+        .animated-logo {
+            animation: glowPulse 2s infinite alternate;
+        }
+
+        @keyframes glowPulse {
+            from { box-shadow: 0 0 1rem rgba(66, 153, 225, 0.4); }
+            to { box-shadow: 0 0 2rem rgba(0, 135, 197, 1); }
+        }
+
+        .logo-name {
+            font-size: 1.2rem;
+        }
+
+        .typing {
+            display: inline-block;
+            overflow: hidden;
+            white-space: nowrap;
+            border-right: 2px solid var(--text-color);
+            animation: typing-effect 1s steps(20, end) forwards, blink-caret 0.75s step-end infinite;
+        }
+
+        @keyframes typing-effect {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+
+        @keyframes blink-caret {
+            from, to { border-color: transparent; }
+            50% { border-color: var(--text-color); }
+        }
+
+        .nav-links {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-links li {
+            position: relative;
+            opacity: 0;
+            transform: translateY(-1rem);
+            animation: fadeInUp 0.8s forwards;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .nav-links a {
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 1rem;
+            padding: 0.5rem 0.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            position: relative;
+            transition: color var(--transition-speed);
+        }
+
+        .nav-links a::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -0.3rem;
+            width: 0%;
+            height: 0.15rem;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            transition: width var(--transition-speed);
+            border-radius: 0.1rem;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-end);
+        }
+
+        .dropdown {
+            position: relative;
+            z-index: 100;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: var(--secondary-bg);
+            min-width: 12.5rem;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            animation: fadeInScale 0.3s ease-in-out;
+            top: calc(100% + 0.5rem);
+            left: 0;
+            border: 1px solid #e0e0e0;
+        }
+
+        .dropdown.active .dropdown-content {
+            display: block;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .dropdown-content a {
+            color: var(--text-color);
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            display: block;
+            white-space: nowrap;
+            border-radius: 0.3rem;
+        }
+
+        .dropdown-content a:hover {
+            background-color: var(--card-bg);
+        }
+
+        .menu-toggle {
+            display: none;
+            font-size: 1.5rem;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+                flex-direction: column;
+                background: var(--secondary-bg);
+                position: absolute;
+                top: 4.5rem;
+                right: 1rem;
+                width: 18rem;
+                padding: 1.5rem;
+                border-radius: 1rem;
+                box-shadow: 0 4px 20px var(--shadow-light);
+                animation: slideInRight 0.5s forwards;
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .dropdown-content {
+                position: static;
+                margin-top: 0.5rem;
+                box-shadow: none;
+                background-color: transparent;
+                padding: 0;
+                border: none;
+            }
+
+            .dropdown-content a {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+            }
+            to {
+                transform: translateX(0);
+            }
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+            align-items: center;
+            padding: 4rem 10%;
+        }
+
+        .hero-text h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-color);
+        }
+
+        .hero-text h1 span {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-text p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            color: var(--subtle-text);
+        }
+
+        .btn {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 2rem;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all var(--transition-speed) ease;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-0.25rem) scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 135, 197, 0.4);
+        }
+
+        .spline-card {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-left: 5%;
+        }
+
+        .spline-frame {
+            width: 100%;
+            max-width: 30rem;
+            height: 25rem;
+            background: var(--secondary-bg);
+            border-radius: 1.5rem;
+            overflow: hidden;
+            box-shadow: 0 0 2rem var(--shadow-light);
+            padding: 0.6rem;
+            border: 1px solid #e0e0e0;
+        }
+
+        .blocker {
+            display: flex;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            height: 3.4rem;
+            width: 11.6rem;
+            position: relative;
+            bottom: -9rem;
+            left: -10.5rem;
+            z-index: 99;
+            border-radius: 0.8rem;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(66, 153, 225, 0.4);
+            position: relative;
+            align-items: center;
+        }
+
+        .blocker::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end), var(--accent-start));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: borderFlow 3s linear infinite;
+        }
+
+        @keyframes borderFlow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        .blocker p {
+            margin: 0;
+            line-height: 2.5rem;
+            text-align: center;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: 200px 0; }
+        }
+
+        spline-viewer {
+            width: 100%;
+            height: 100%;
+            border-radius: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .hero {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            .blocker { display: none; }
+            .spline-card {
+                margin-top: 2rem;
+                margin-left: 0; /* Center on mobile */
+            }
+            .spline-frame { display: none; } /* Hide spline on mobile */
+            .mobile-only { display: block; } /* Show mobile-only */
+        }
+
+        .footer {
+            background: var(--secondary-bg);
+            color: var(--subtle-text);
+            text-align: center;
+            padding: 2rem 1rem;
+            margin-top: 3rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            transition: background var(--transition-speed);
+        }
+
+        .footer-content p {
+            margin: 0.3rem 0;
+        }
+
+        .footer-content a {
+            color: var(--subtle-text);
+            text-decoration: none;
+            transition: color var(--transition-speed);
+        }
+
+        .footer-content a:hover {
+            color: var(--accent-end);
+        }
+
+        .social-icons {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1.25rem;
+        }
+
+        .social-icons a {
+            font-size: 1.5rem;
+            color: var(--subtle-text);
+            transition: all var(--transition-speed) ease-in-out;
+        }
+
+        .social-icons a:hover {
+            color: var(--accent-end);
+            transform: scale(1.2) translateY(-0.25rem);
+            text-shadow: 0 0 1rem rgba(0, 135, 197, 0.7);
+        }
+
+        .events {
+            padding: 4rem 1rem;
+            background: var(--primary-bg);
+            text-align: center;
+            color: var(--text-color);
+            transition: background var(--transition-speed);
+        }
+
+        .events h2 {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 0.75rem rgba(0, 135, 197, 0.6);
+            color: var(--text-color);
+        }
+
+        .events-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .event-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 0 1.25rem var(--shadow-light);
+            transition: all var(--transition-speed) ease;
+            width: 16.5rem;
+            text-align: left;
+            border: 1px solid rgba(0, 135, 197, 0.1);
+        }
+
+        .event-card:hover {
+            transform: translateY(-0.5rem) scale(1.02);
+            box-shadow: 0 0 2rem rgba(0, 135, 197, 0.2);
+        }
+
+        .event-card h3 {
+            margin-bottom: 0.5rem;
+            color: var(--accent-start);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .event-card p {
+            margin: 0.3rem 0;
+            color: var(--subtle-text);
+        }
+
+        .mobile-only {
+            display: none;
+        }
+
+        .desktop-only {
+            display: block;
+        }
+
+        .glow-logo {
+            width: 12.5rem;
+            height: 12.5rem;
+            border-radius: 50%;
+            animation: glowPulse 2s infinite alternate, floaty 4s ease-in-out infinite;
+            box-shadow: 0 0 2rem rgba(66, 153, 225, 0.8);
+        }
+
+        @keyframes floaty {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-0.75rem); }
+            100% { transform: translateY(0); }
+        }
+
+        @media (max-width: 900px) {
+            .desktop-only { display: none; }
+            .mobile-only {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+        }
+
+        .todays-classes {
+            padding: 4rem 1rem;
+            background: var(--primary-bg);
+            text-align: center;
+            color: var(--text-color);
+            transition: background var(--transition-speed);
+        }
+
+        .todays-classes h2 {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            text-shadow: 0 0 0.75rem rgba(0, 135, 197, 0.6);
+            color: var(--text-color);
+        }
+
+        .classes-list {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 1.5rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 1.5rem;
+            box-shadow: inset 0 0 1.5rem rgba(0, 0, 0, 0.05), 0 0.5rem 2rem var(--shadow-light);
+            transition: all var(--transition-speed);
+        }
+
+        .classes-list::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .classes-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+
+        .classes-list::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, var(--accent-start), var(--accent-end));
+            border-radius: 10px;
+        }
+
+        .class-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1.25rem;
+            box-shadow: 0 0 1.5rem var(--shadow-light);
+            min-width: 17rem;
+            transition: all var(--transition-speed) ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(0, 135, 197, 0.1);
+            animation: cardFadeIn 0.8s ease forwards;
+            opacity: 0;
+            transform: translateY(1rem);
+        }
+
+        .class-card:hover {
+            transform: translateY(-0.5rem) scale(1.02);
+            box-shadow: 0 0 2rem rgba(0, 135, 197, 0.2);
+            border-color: var(--accent-end);
+        }
+
+        .class-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(66, 153, 225, 0.1) 0%, transparent 70%);
+            animation: cardGlow 3s infinite linear;
+            z-index: 0;
+        }
+
+        @keyframes cardGlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .class-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent-end);
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .class-card p {
+            font-size: 1rem;
+            color: var(--subtle-text);
+            position: relative;
+            z-index: 1;
+        }
+
+        .class-card p:first-of-type {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .class-card i {
+            color: var(--accent-start);
+        }
+
+        .holiday-message {
+            font-size: 2.5rem;
+            font-weight: 800;
+            text-align: center;
+            margin: 2.5rem auto;
+            padding: 1.25rem 2.5rem;
+            border-radius: 1.25rem;
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #2e86de);
+            background-size: 300% 300%;
+            color: #fff;
+            width: fit-content;
+            animation: gradientShift 5s infinite linear, bounceWave 2s infinite ease-in-out;
+            box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.2);
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes bounceWave {
+            0%, 100% { transform: translateY(0) scale(1); }
+            25% { transform: translateY(-0.5rem) scale(1.02); }
+            50% { transform: translateY(0) scale(1.05); }
+            75% { transform: translateY(0.5rem) scale(1.02); }
+        }
+
+        .loading-message {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 1.25rem;
+            border-radius: 1rem;
+            background: linear-gradient(90deg, #6a82fb, #d3d9ff, #ff6b6b, #feca57);
+            background-size: 300% 300%;
+            color: #fff;
+            animation: gradientFlow 5s infinite linear, pulse 2s infinite ease-in-out;
+            box-shadow: 0 0.35rem 1.25rem var(--shadow-heavy);
+            display: inline-block;
+            text-align: center;
+            margin: 2rem auto;
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .gradient-username {
+            display: inline-block;
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end), var(--accent-start));
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientFlow 5s infinite linear;
+            margin-top: 0.5rem;
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .fade-in {
+            animation: fade-in 1s ease-in-out;
+        }
+
+        @keyframes cardFadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .holidays {
+            padding: 4rem 1rem;
+            background: var(--primary-bg);
+            text-align: center;
+            color: var(--text-color);
+            transition: background var(--transition-speed);
+        }
+
+        .holidays h2 {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 0.75rem rgba(0, 135, 197, 0.6);
+            color: var(--text-color);
+        }
+
+        .holidays-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .holiday-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 0 1.25rem var(--shadow-light);
+            transition: all var(--transition-speed) ease;
+            width: 16.5rem;
+            text-align: left;
+            border: 1px solid rgba(0, 135, 197, 0.1);
+        }
+
+        .holiday-card:hover {
+            transform: translateY(-0.5rem) scale(1.02);
+            box-shadow: 0 0 2rem rgba(0, 135, 197, 0.2);
+        }
+
+        .holiday-card h3 {
+            margin-bottom: 0.5rem;
+            color: var(--accent-start);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .holiday-card p {
+            margin: 0.3rem 0;
+            color: var(--subtle-text);
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="logo-container">
+            <div class="logo-flipper" id="logo-flipper">
+                <!-- Updated paths using url_for -->
+                <img class="logo-image front" 
+                     src="{{ url_for('static', filename='images/nitlogonew.png') }}" 
+                     alt="NIT Sikkim Logo"
+                     onerror="this.onerror=null; this.src='https://placehold.co/60x60/f0f4f8/1c2b3a?text=NIT';">
+                <img class="logo-image back animated-logo" 
+                     src="{{ url_for('static', filename='images/ttlogo.jpg') }}" 
+                     alt="Stellar Mind Logo"
+                     onerror="this.onerror=null; this.src='https://placehold.co/60x60/4299e1/ffffff?text=SM';">
+            </div>
+            <span id="logo-name" class="logo-name"></span>
+        </div>
+        <div class="menu-toggle" id="mobile-menu">
+            <i class="fas fa-bars"></i>
+        </div>
+
+        <ul class="nav-links" id="nav-links">
+            <!-- Conditional Links based on user role -->
+            <li>
+                {% if session.user.role == "admin" %}
+                    <a href="{{ url_for('admin_mark_attendance_page') }}" id="attendance-link"><i class="fas fa-user-check"></i> Attendance</a>
+                {% elif session.user.role == "teacher" %}
+                    <a href="{{ url_for('mark_attendance_page') }}" id="attendance-link"><i class="fas fa-user-check"></i> Attendance</a>
+                {% else %}
+                    <!-- Added new student_attendance_page route -->
+                    <a href="{{ url_for('student_attendance_page') }}" id="attendance-link"><i class="fas fa-user-check"></i> Attendance</a>
+                {% endif %}
+            </li>
+            <li><a href="#"><i class="fas fa-robot"></i> AI HELPER</a></li> <!-- Placeholder AI Helper Link -->
+            <li>
+                {% if session.user.role == "admin" %}
+                    <a href="{{ url_for('admin_enter_marks_page') }}" id="marks-link"><i class="fas fa-clipboard"></i> Marks</a>
+                {% elif session.user.role == "teacher" %}
+                    <a href="{{ url_for('enter_marks_page') }}" id="marks-link"><i class="fas fa-clipboard"></i> Marks</a>
+                {% else %}
+                     <!-- Added new student_marks_page route -->
+                    <a href="{{ url_for('student_marks_page') }}" id="marks-link"><i class="fas fa-clipboard"></i> Marks</a>
+                {% endif %}
+            </li>
+            
+            <!-- Teacher/Admin only links -->
+            {% if session.user.role == 'teacher' or session.user.role == 'admin' %}
+            <li id="teacher-performance-link">
+                <a href="{{ url_for('view_student_profiles_page') }}"><i class="fas fa-chart-line"></i> Student Performance</a>
+            </li>
+            <li id="event-management-link">
+                <a href="{{ url_for('manage_events_page') }}"><i class="fas fa-calendar-alt"></i> Event Management</a>
+            </li>
+            {% endif %}
+
+            <li class="dropdown" id="important-links-dropdown">
+                <a href="#" id="important-links-toggle"><i class="fas fa-link"></i> Important Links <i class="fas fa-caret-down"></i></a>
+                <div class="dropdown-content">
+                    <a href="https://kic.nitsikkim.ac.in/downloads/Gate%20Pass%202%20(1).pdf"><i class="fas fa-user-check"></i> Gate Pass</a>
+                    <a href="https://nitsikkim.samarth.edu.in/index.php/site/login"><i class="fas fa-user-check"></i> Samarth Portal</a>
+                    <a href="https://nitsikkim.ac.in/documents/downloads/Proforma_Form%20for%20Issuing%20Certificate_English.pdf"><i class="fas fa-user-check"></i> Academic Document</a>
+                    <a href="https://nitsikkim.ac.in/students/academicCalendar.php"><i class="fas fa-user-check"></i> Academic Calendar</a>
+                </div>
+            </li>
+            
+            <!-- Auth Button (Login/Logout) -->
+            {% if session.user %}
+                {% set display_name = session.user.student_name or session.user.teacher_name or session.user.username %}
+                <li id="auth-btn"><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> {{ display_name | truncate(15) }} (Logout)</a></li>
+            {% else %}
+                <li id="auth-btn"><a href="{{ url_for('login_page') }}"><i class="fas fa-sign-in-alt"></i> Login</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-text">
+            <h1>
+                Welcome to <span>Stellar Mind</span><br>
+                <!-- Display user's name if logged in -->
+                {% if session.user %}
+                    {% set display_name = session.user.student_name or session.user.teacher_name or session.user.username %}
+                    <span id="welcome-user" class="gradient-username">Hi, {{ display_name }} 👋</span>
+                {% endif %}
+            </h1>
+            <p>
+                Stellar Mind is a community-driven club where innovation meets creativity.
+                We explore cutting-edge technology, design, and ideas to inspire the next generation of thinkers and
+                creators.
+            </p>
+            <a href="#" class="btn">About Us</a> <!-- Placeholder About Us link -->
+        </div>
+
+        <div class="spline-card">
+            <div class="spline-frame desktop-only">
+                <script type="module" src="https://unpkg.com/@splinetool/viewer@1.10.48/build/spline-viewer.js"></script>
+                <spline-viewer url="https://prod.spline.design/T-sK3KIXQLUHJVmk/scene.splinecode"></spline-viewer>
+            </div>
+            <div class="blocker">
+                <p>SM</p>
+            </div>
+            <div class="mobile-logo mobile-only">
+                <img src="{{ url_for('static', filename='images/ttlogo.jpg') }}" alt="Stellar Mind Logo" class="glow-logo"
+                     onerror="this.onerror=null; this.src='https://placehold.co/200x200/4299e1/ffffff?text=SM';">
+            </div>
+        </div>
+    </section>
+
+    <!-- Today's Classes (Only for Students) -->
+    {% if session.user.role == 'student' %}
+    <section class="todays-classes" id="todays-classes-section">
+        <h2>Today's Classes</h2>
+        <div id="classes-list" class="classes-list">
+            {% if today_is_holiday %}
+                <div class="holiday-message">🎉 Today is a Holiday 🎉</div>
+            {% elif daily_schedule %}
+                {% for item in daily_schedule %}
+                    {% set parts = item.split('→') %}
+                    {% set time = parts[0].strip() %}
+                    {% set details = parts[1].strip() if parts|length > 1 else "No details" %}
+                    <div class="class-card">
+                        <p><i class="fas fa-clock"></i> {{ time }}</p>
+                        <p>{{ details }}</p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <!-- No classes or schedule not found -->
+                <div class="loading-message">
+                    <span>📡 No schedule found for today.</span>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="events">
+        <h2>Upcoming Events</h2>
+        <div id="events-list" class="events-list">
+            {% if events %}
+                {% for event in events %}
+                <div class="event-card">
+                    <h3><i class="fas fa-star"></i> {{ event.name }}</h3>
+                    <p><i class="fas fa-calendar-alt"></i> {{ event.date }}</p>
+                    <p><i class="fas fa-clock"></i> {{ event.time or 'N/A' }}</p>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>No upcoming events 🎉</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="holidays" id="upcoming-holidays-section">
+        <h2>Upcoming Holidays</h2>
+        <div id="holidays-list" class="holidays-list">
+             {% if holidays %}
+                {% for holiday in holidays %}
+                <div class="holiday-card">
+                    <h3><i class="fas fa-umbrella-beach"></i> {{ holiday.name }}</h3>
+                    <p><i class="fas fa-calendar-day"></i> {{ holiday.date }}</p>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>No upcoming holidays 🎉</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>© {{ now.year }} Stellar Mind | NIT Sikkim</p> <!-- Use 'now' from layout -->
+            <p>📞 Contact: <a href="tel:+917908750746">+91 7908750746</a></p>
+            <p><a href="#"><i class="fas fa-file-contract"></i> Terms & Conditions</a></p>
+
+            <div class="social-icons">
+                <a href="https://wa.me/7037796470" target="_blank"><i class="fab fa-whatsapp"></i></a>
+                <a href="https://instagram.com/" target="_blank"><i class="fab fa-instagram"></i></a>
+                <a href="https://linkedin.com/" target="_blank"><i class="fab fa-linkedin"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- UI/Animation JavaScript (Data-loading logic removed) -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const toggleBtn = document.querySelector(".menu-toggle");
+            const navLinks = document.querySelector(".nav-links");
+            const importantLinksDropdown = document.getElementById('important-links-dropdown');
+            const importantLinksToggle = document.getElementById('important-links-toggle');
+
+            // Mobile menu toggle
+            if (toggleBtn) {
+                toggleBtn.addEventListener("click", () => {
+                    navLinks.classList.toggle("active");
+                });
+            }
+
+            // Close mobile menu when clicking outside
+            document.addEventListener("click", (e) => {
+                if (!navLinks) return;
+                const isClickInsideMenu = navLinks.contains(e.target);
+                const isClickOnToggle = toggleBtn.contains(e.target);
+
+                if (navLinks.classList.contains("active") && !isClickInsideMenu && !isClickOnToggle) {
+                    navLinks.classList.remove("active");
+                }
+            });
+
+            // Logic for the "Important Links" dropdown
+            if (importantLinksToggle) {
+                importantLinksToggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    importantLinksDropdown.classList.toggle('active');
+                });
+            }
+
+            // Close dropdown when clicking anywhere else
+            document.addEventListener('click', (e) => {
+                if (importantLinksDropdown && !importantLinksDropdown.contains(e.target)) {
+                    importantLinksDropdown.classList.remove('active');
+                }
+            });
+
+            // Logo Flipper Animation
+            const logoFlipper = document.getElementById('logo-flipper');
+            const logoNameSpan = document.getElementById('logo-name');
+            const logoNames = ['NIT Sikkim', 'Stellar Mind'];
+            let currentNameIndex = 0;
+
+            if (logoFlipper && logoNameSpan) {
+                const typeText = (text) => {
+                    return new Promise(resolve => {
+                        logoNameSpan.textContent = '';
+                        logoNameSpan.classList.add('typing');
+                        logoNameSpan.style.borderRight = '2px solid var(--text-color)'; // Ensure caret is visible
+                        let i = 0;
+                        const interval = setInterval(() => {
+                            if (i < text.length) {
+                                logoNameSpan.textContent += text.charAt(i);
+                                i++;
+                            } else {
+                                clearInterval(interval);
+                                logoNameSpan.classList.remove('typing');
+                                logoNameSpan.style.borderRight = 'none';
+                                resolve();
+                            }
+                        }, 50);
+                    });
+                };
+
+                const runAnimation = async () => {
+                    if (!logoFlipper) return;
+                    logoFlipper.classList.toggle('flipped');
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                    currentNameIndex = (currentNameIndex + 1) % logoNames.length;
+                    await typeText(logoNames[currentNameIndex]);
+                    await new Promise(resolve => setTimeout(resolve, 2400));
+                    runAnimation();
+                };
+
+                typeText(logoNames[currentNameIndex]).then(() => {
+                    setTimeout(runAnimation, 2000);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
