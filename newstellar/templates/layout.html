@@ -38,7 +38,7 @@
         .logo-container { display: flex; align-items: center; gap: 0.75rem; }
         .logo-img { height: 40px; width: 40px; border-radius: 50%; object-fit: cover; }
         .logo-name { font-size: 1.2rem; font-weight: 600; }
-        .nav-links { display: flex; align-items: center; gap: 1rem; }
+        .nav-links { display: flex; align-items: center; gap: 1rem; list-style: none; padding: 0; margin: 0; } /* Added list-style etc */
         .nav-links a { color: #1c2b3a; text-decoration: none; padding: 0.5rem; transition: color 0.3s ease; display: inline-flex; align-items: center; gap: 0.3rem;}
         .nav-links a:hover { color: #007bff; }
         .nav-links i { margin-right: 0.25rem; }
@@ -110,22 +110,22 @@
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo-img" onerror="this.onerror=null; this.src='https://placehold.co/40x40/0d6efd/ffffff?text=SM';">
             <span class="logo-name">StellarMind Prod</span>
         </div>
-        <div class="nav-links">
+        <ul class="nav-links"> {# Changed div to ul for semantic correctness #}
             {% if session.user %}
-                <span class="user-greeting">Hello, {{ (session.user.get('student_name') or session.user.get('teacher_name') or session.user.username)|truncate(20) }}!</span>
-                <a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                <li><span class="user-greeting">Hello, {{ (session.user.get('student_name') or session.user.get('teacher_name') or session.user.username)|truncate(20) }}!</span></li>
+                <li><a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             {% else %}
-                <a href="{{ url_for('login_page') }}"><i class="fas fa-sign-in-alt"></i> Login</a>
-                <a href="{{ url_for('signup_page') }}"><i class="fas fa-user-plus"></i> Sign Up</a>
+                <li><a href="{{ url_for('login_page') }}"><i class="fas fa-sign-in-alt"></i> Login</a></li>
+                <li><a href="{{ url_for('signup_page') }}"><i class="fas fa-user-plus"></i> Sign Up</a></li>
             {% endif %}
-        </div>
+        </ul>
     </nav>
 
     <!-- Flash messages container -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div class="flash-messages">
+            <div class="flash-messages container"> {# Added container class for padding #}
             {% for category, message in messages %}
                 <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
             {% endfor %}

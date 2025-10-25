@@ -2,6 +2,7 @@
 
 import requests
 import json
+import datetime # Import datetime
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -9,7 +10,7 @@ from functools import wraps
 # Import configuration variables
 from config import (
     SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
-    MARKS_TABLES, SECRET_KEY
+    MARKS_TABLES, SECRET_KEY, GRADES_TABLE # Added GRADES_TABLE
     # Add other tables from config as needed, e.g., ATTENDANCE_TABLE
 )
 
@@ -21,32 +22,58 @@ app.config['SECRET_KEY'] = SECRET_KEY
 
 def get_supabase_rest_url(table_name):
     """Constructs the Supabase REST API URL for a table."""
+    # Basic validation to prevent unintended table access
+    allowed_tables = STUDENT_TABLES + MARKS_TABLES + [TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE] # Add other valid tables
+    if table_name not in allowed_tables:
+         raise ValueError(f"Access to table '{table_name}' is not permitted.")
     return f"{SUPABASE_URL}/rest/v1/{table_name}"
 
 def determine_student_batch(roll_no):
-    """Determines the batch table (b1-b4) based on roll number prefix or logic."""
-    # Example Logic: This needs to be defined based on how roll numbers map to batches.
-    # Placeholder: Assume first char determines batch (e.g., '1' -> b1, '2' -> b2)
-    # Or based on year part if available in roll_no structure.
-    # For now, we'll search all tables in the login function.
-    # This function might be more useful during signup or data entry.
-    year_prefix = roll_no[1] # Assuming roll no starts like 'b1...', 'b2...'
-    if year_prefix == '1': return 'b1'
-    if year_prefix == '2': return 'b2'
-    if year_prefix == '3': return 'b3'
-    if year_prefix == '4': return 'b4'
-    return None # Or default to searching all
+    """Determines the batch table (b1-b4) based on roll number prefix."""
+    # Assuming roll no starts like 'b1...', 'b2...' etc. Case-insensitive.
+    if not roll_no or len(roll_no) < 2:
+        return None
+    # Adjust index if roll number format is different (e.g., 'B240001')
+    # Check the character at index 1 for the year (assuming 'B' or 'b' is at index 0)
+    year_prefix_char = roll_no.lower()[1]
+    if year_prefix_char.isdigit():
+        year_prefix = year_prefix_char
+        if year_prefix == '1': return 'b1'
+        if year_prefix == '2': return 'b2'
+        if year_prefix == '3': return 'b3'
+        if year_prefix == '4': return 'b4'
+
+    # Fallback or handle other formats if necessary
+    # Example: Check index 2 if format is 'BX...'
+    if len(roll_no) > 2:
+        year_prefix_char_alt = roll_no.lower()[2]
+        if year_prefix_char_alt.isdigit():
+            year_prefix_alt = year_prefix_char_alt
+            # Map based on the first digit after 'B' or similar prefix
+            # This logic might need refinement based on actual roll number patterns
+            # Example assumption: 'B24...' -> year 2 -> b2
+            if year_prefix_alt == '1': return 'b1'
+            if year_prefix_alt == '2': return 'b2'
+            if year_prefix_alt == '3': return 'b3'
+            if year_prefix_alt == '4': return 'b4'
+
+    print(f"Warning: Could not determine batch for roll_no: {roll_no}")
+    return None # Return None if no match
 
 def get_marks_table_for_student(roll_no):
     """Determines the correct marks table (marks1-marks4) for a student."""
-    # This logic depends on how students are mapped to marks tables (e.g., by year).
-    # Assuming the same logic as determine_student_batch for simplicity.
     batch = determine_student_batch(roll_no)
     if batch == 'b1': return 'marks1'
     if batch == 'b2': return 'marks2'
     if batch == 'b3': return 'marks3'
     if batch == 'b4': return 'marks4'
     return None
+
+# --- Context Processor ---
+# Make 'now' available to all templates for the year in footer
+@app.context_processor
+def inject_now():
+    return {'now': datetime.datetime.utcnow()}
 
 # --- Authentication Decorators ---
 
@@ -60,9 +87,17 @@ def login_required(role=None):
                 return redirect(url_for('login_page'))
             if role:
                 required_roles = role if isinstance(role, list) else [role]
-                if session['user'].get('role') not in required_roles:
-                    flash('You do not have permission to access this page.', 'danger')
-                    return redirect(url_for('index')) # Redirect to a default page
+                user_role = session['user'].get('role')
+                if user_role not in required_roles:
+                    flash(f'Access denied. Required role: {", ".join(required_roles)}.', 'danger')
+                    # Redirect based on current role or to index
+                    if user_role == 'admin':
+                         return redirect(url_for('admin_dashboard'))
+                    elif user_role == 'teacher':
+                         return redirect(url_for('teacher_dashboard'))
+                    else: # student or unknown
+                         return redirect(url_for('student_dashboard'))
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -75,22 +110,21 @@ def fetch_and_verify_user(username, password):
 
     # 1. Try Student Tables
     for table_name in STUDENT_TABLES:
-        url = get_supabase_rest_url(table_name)
-        params = {'select': '*,student_password', 'roll_no': f'eq.{username_lower}'}
         try:
-            response = requests.get(url, headers=SUPABASE_HEADERS, params=params)
+            url = get_supabase_rest_url(table_name)
+            # Fetch the password column along with other user data
+            params = {'select': '*,student_password', 'roll_no': f'eq.{username_lower}'}
+            response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
             if data and len(data) == 1:
                 user_data = data[0]
-                # !! CRITICAL SECURITY NOTE !!
-                # The check below assumes PLAIN TEXT passwords in the database.
-                # This is VERY INSECURE. In production, store hashed passwords
-                # and use check_password_hash(user_data['student_password'], password).
-                # Remove '.replace("$2b$", "$2a$")' if not using bcrypt compatibility fix.
-                # if check_password_hash(user_data.get('student_password', '').replace("$2b$", "$2a$"), password):
-                if user_data.get('student_password') == password: # Insecure plain text check
-                    user_data.pop('student_password', None)
+                # !! IMPORTANT: Replace plain text check with hash check !!
+                # This check assumes PLAIN TEXT passwords in the DB (INSECURE)
+                # if user_data.get('student_password') == password:
+                # Use this line INSTEAD if passwords are HASHED in the DB:
+                if check_password_hash(user_data.get('student_password', ''), password):
+                    user_data.pop('student_password', None) # Remove password before storing in session
                     user_data['role'] = 'student'
                     user_data['batch'] = table_name # Store the batch table name
                     return user_data
@@ -98,19 +132,21 @@ def fetch_and_verify_user(username, password):
             print(f"Error querying {table_name}: {e}")
         except json.JSONDecodeError:
             print(f"Failed to decode JSON from {table_name}")
+        except ValueError as e: # Catch error from get_supabase_rest_url if needed
+             print(e)
 
     # 2. Try Teacher Table
-    url = get_supabase_rest_url(TEACHER_TABLE)
-    params = {'select': '*,teacher_password', 'username': f'eq.{username_lower}'}
     try:
-        response = requests.get(url, headers=SUPABASE_HEADERS, params=params)
+        url = get_supabase_rest_url(TEACHER_TABLE)
+        params = {'select': '*,teacher_password', 'username': f'eq.{username_lower}'}
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
         if data and len(data) == 1:
             user_data = data[0]
-            # !! Use check_password_hash if passwords are hashed in DB !!
-            # if check_password_hash(user_data.get('teacher_password', '').replace("$2b$", "$2a$"), password):
-            if user_data.get('teacher_password') == password: # Insecure plain text check
+            # !! Replace with HASH CHECK once DB is updated !!
+            # if user_data.get('teacher_password') == password:
+            if check_password_hash(user_data.get('teacher_password', ''), password):
                 user_data.pop('teacher_password', None)
                 user_data['role'] = 'teacher'
                 return user_data
@@ -118,19 +154,22 @@ def fetch_and_verify_user(username, password):
         print(f"Error querying {TEACHER_TABLE}: {e}")
     except json.JSONDecodeError:
         print(f"Failed to decode JSON from {TEACHER_TABLE}")
+    except ValueError as e:
+         print(e)
+
 
     # 3. Try Admin Table (Assuming 'admins' table and 'password' column)
-    url = get_supabase_rest_url(ADMIN_TABLE)
-    params = {'select': '*,password', 'username': f'eq.{username_lower}'}
     try:
-        response = requests.get(url, headers=SUPABASE_HEADERS, params=params)
+        url = get_supabase_rest_url(ADMIN_TABLE)
+        params = {'select': '*,password', 'username': f'eq.{username_lower}'}
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
         if data and len(data) == 1:
             user_data = data[0]
-            # !! Use check_password_hash if passwords are hashed in DB !!
-            # if check_password_hash(user_data.get('password', '').replace("$2b$", "$2a$"), password):
-            if user_data.get('password') == password: # Insecure plain text check
+             # !! Replace with HASH CHECK once DB is updated !!
+            # if user_data.get('password') == password:
+            if check_password_hash(user_data.get('password', ''), password):
                 user_data.pop('password', None)
                 user_data['role'] = 'admin'
                 return user_data
@@ -138,6 +177,8 @@ def fetch_and_verify_user(username, password):
         print(f"Error querying {ADMIN_TABLE}: {e}")
     except json.JSONDecodeError:
         print(f"Failed to decode JSON from {ADMIN_TABLE}")
+    except ValueError as e:
+         print(e)
 
     return None # No user found or password incorrect
 
@@ -161,7 +202,7 @@ def login_page():
     """Handles GET request for login page and POST for login attempt."""
     if request.method == "POST":
         username = request.form.get("username", "").strip()
-        password = request.form.get("password", "").strip()
+        password = request.form.get("password", "").strip() # Don't strip password leading/trailing spaces
 
         if not username or not password:
             flash("Username and password are required.", "danger")
@@ -171,11 +212,15 @@ def login_page():
 
         if user_data:
             session['user'] = user_data # Store user data in session
-            flash(f"Welcome back, {user_data.get('student_name') or user_data.get('teacher_name') or user_data.get('username')}!", "success")
+            display_name = (user_data.get('student_name') or
+                            user_data.get('teacher_name') or
+                            user_data.get('username', 'User'))
+            flash(f"Welcome back, {display_name}!", "success")
             return redirect(url_for('index')) # Redirect to appropriate dashboard via index
         else:
             flash("Invalid credentials. Please try again.", "danger")
-            return render_template("login.html"), 401 # Unauthorized
+            # Return 401 status code for failed login attempts
+            return render_template("login.html"), 401
 
     # If GET request
     if 'user' in session:
@@ -190,43 +235,173 @@ def logout():
     flash("You have been logged out.", "info")
     return redirect(url_for('login_page'))
 
-# --- Dashboard Routes (Placeholders) ---
+# --- Route for Student Signup Page ---
+@app.route("/signup", methods=["GET", "POST"])
+def signup_page():
+    if request.method == "POST":
+        # --- Signup Logic ---
+        roll_no = request.form.get("roll_no", "").strip().lower()
+        student_name = request.form.get("student_name", "").strip()
+        student_email = request.form.get("student_email", "").strip().lower()
+        password = request.form.get("student_password", "").strip()
+        confirm_password = request.form.get("confirm_password", "").strip()
+
+        # Basic Validation (add more as needed)
+        if not all([roll_no, student_name, student_email, password, confirm_password]):
+            flash("All fields are required.", "danger")
+            return render_template("signup.html")
+        if password != confirm_password:
+            flash("Passwords do not match.", "danger")
+            return render_template("signup.html")
+        if len(password) < 8:
+            flash("Password must be at least 8 characters long.", "danger")
+            return render_template("signup.html")
+
+        batch_table = determine_student_batch(roll_no)
+        if not batch_table:
+            flash("Invalid Roll Number format or year.", "danger")
+            return render_template("signup.html")
+
+        # Check if user already exists
+        try:
+            url_check = get_supabase_rest_url(batch_table)
+            params_check_roll = {'select': 'roll_no', 'roll_no': f'eq.{roll_no}'}
+            params_check_email = {'select': 'student_email', 'student_email': f'eq.{student_email}'}
+
+            response_roll = requests.get(url_check, headers=SUPABASE_HEADERS, params=params_check_roll, timeout=5)
+            response_email = requests.get(url_check, headers=SUPABASE_HEADERS, params=params_check_email, timeout=5)
+
+            if response_roll.ok and response_roll.json():
+                 flash(f"Roll number '{roll_no}' is already registered.", "danger")
+                 return render_template("signup.html")
+            if response_email.ok and response_email.json():
+                 flash(f"Email '{student_email}' is already registered.", "danger")
+                 return render_template("signup.html")
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error checking existing user: {e}")
+            flash("Could not verify user existence. Please try again.", "warning")
+            return render_template("signup.html")
+        except ValueError as e:
+            flash(str(e), "danger")
+            return render_template("signup.html")
+
+        # --- HASH Password ---
+        hashed_password = generate_password_hash(password)
+
+        new_student_data = {
+            "roll_no": roll_no,
+            "student_name": student_name,
+            "student_email": student_email,
+            "student_password": hashed_password, # Store the HASH
+        }
+
+        # Insert into Supabase
+        try:
+            url_insert = get_supabase_rest_url(batch_table)
+            response_insert = requests.post(url_insert, headers=SUPABASE_HEADERS, json=new_student_data, timeout=10)
+            response_insert.raise_for_status()
+
+            if response_insert.status_code == 201:
+                flash("Account created successfully! Please log in.", "success")
+                return redirect(url_for('login_page'))
+            else:
+                error_details = response_insert.json().get('message', 'Unknown error')
+                flash(f"Signup failed: {error_details}", "danger")
+                print(f"Supabase signup error response: {response_insert.text}")
+                return render_template("signup.html")
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error inserting user: {e}")
+            flash("Signup failed due to a network or server error. Please try again.", "danger")
+            return render_template("signup.html")
+        except ValueError as e:
+            flash(str(e), "danger")
+            return render_template("signup.html")
+        except Exception as e:
+            print(f"Unexpected error during signup: {e}")
+            flash("An unexpected error occurred during signup.", "danger")
+            return render_template("signup.html")
+
+    # If GET request
+    return render_template("signup.html")
+
+# --- Route for Teacher Signup Page ---
+# ADDED this route definition
+@app.route("/teacher-signup", methods=["GET", "POST"])
+def teacher_signup_page():
+    if request.method == "POST":
+        # --- Teacher Signup Logic (Placeholder) ---
+        # Implement logic similar to student signup:
+        # 1. Get form data (teacher_name, username, email, password, confirm_password, department?)
+        # 2. Validate input.
+        # 3. Check if teacher username/email already exists in TEACHER_TABLE.
+        # 4. Hash the password.
+        # 5. Insert the new teacher record into TEACHER_TABLE.
+        # 6. Redirect to login with success/error message.
+        flash("Teacher signup not yet implemented.", "info")
+        return redirect(url_for('login_page')) # Redirect for now
+
+    # If GET request, render the teacher signup template
+    # You'll need to create templates/teacher_signup.html
+    return render_template("teacher_signup.html") # Assuming you create this template
+
+# --- Route for Forgot Password Page ---
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password_page():
+    if request.method == "POST":
+        username_or_email = request.form.get("username_or_email", "").strip()
+        # --- Password Reset Logic Placeholder ---
+        flash("Password reset functionality is not yet fully implemented.", "info")
+        return redirect(url_for('login_page'))
+
+    # If GET request
+    return render_template("forgot_password.html")
+
+# --- Dashboard Routes ---
 
 @app.route("/dashboard/student")
 @login_required(role='student')
 def student_dashboard():
     user = session['user']
     roll_no = user.get('roll_no')
-    marks_table = get_marks_table_for_student(roll_no)
+    if not roll_no:
+        flash("User data incomplete. Cannot fetch details.", "danger")
+        return redirect(url_for('logout'))
 
+    marks_table = get_marks_table_for_student(roll_no)
     marks_data = []
-    semesters_data = {} # To hold SGPA/CGPA if available
+    semesters_data = {}
 
     # Fetch Marks
     if marks_table:
-        url = get_supabase_rest_url(marks_table)
-        params = {'select': 'subject_code,mid1,mid2,endsem,final_grade,internal_marks', 'roll_no': f'eq.{roll_no}'}
         try:
-            response = requests.get(url, headers=SUPABASE_HEADERS, params=params)
-            response.raise_for_status()
-            marks_data = response.json()
+            url_marks = get_supabase_rest_url(marks_table)
+            params_marks = {'select': 'subject_code,mid1,mid2,endsem,final_grade,internal_marks', 'roll_no': f'eq.{roll_no.lower()}'}
+            response_marks = requests.get(url_marks, headers=SUPABASE_HEADERS, params=params_marks, timeout=10)
+            response_marks.raise_for_status()
+            marks_data = response_marks.json()
         except Exception as e:
-            flash(f"Could not fetch marks: {e}", "warning")
+            print(f"Error fetching marks for {roll_no}: {e}")
+            flash(f"Could not fetch marks.", "warning")
+    else:
+        flash(f"Could not determine marks table for {roll_no}.", "warning")
+
 
     # Fetch Grades (SGPA/CGPA)
     try:
-        url_grades = get_supabase_rest_url('grades') # Assuming 'grades' table name
-        params_grades = {'select': '*', 'roll_no': f'eq.{roll_no}'}
-        response_grades = requests.get(url_grades, headers=SUPABASE_HEADERS, params=params_grades)
+        url_grades = get_supabase_rest_url(GRADES_TABLE)
+        params_grades = {'select': '*', 'roll_no': f'eq.{roll_no.lower()}'} # Ensure roll_no matches case if needed
+        response_grades = requests.get(url_grades, headers=SUPABASE_HEADERS, params=params_grades, timeout=10)
         response_grades.raise_for_status()
         grades_result = response_grades.json()
         if grades_result and len(grades_result) == 1:
             raw_grades = grades_result[0]
-            # Process grades for easier display
             for i in range(1, 9):
                 sem_key = f'sem{i}'
                 sgpa_key = f'sgpa_{sem_key}'
                 credits_key = f'total_credits_{sem_key}'
+                # Only add semester if it has SGPA or credits data
                 if raw_grades.get(sgpa_key) is not None or raw_grades.get(credits_key) is not None:
                     semesters_data[sem_key] = {
                         'sgpa': raw_grades.get(sgpa_key),
@@ -235,8 +410,8 @@ def student_dashboard():
             semesters_data['cgpa'] = raw_grades.get('cgpa')
 
     except Exception as e:
-        flash(f"Could not fetch grades data: {e}", "warning")
-
+        print(f"Error fetching grades for {roll_no}: {e}")
+        flash(f"Could not fetch grades data.", "warning")
 
     return render_template("student_dashboard.html", user=user, marks=marks_data, grades=semesters_data)
 
@@ -244,58 +419,77 @@ def student_dashboard():
 @login_required(role='teacher')
 def teacher_dashboard():
     user = session['user']
-    # Add logic to fetch teacher-specific data (e.g., assigned courses)
     return render_template("teacher_dashboard.html", user=user)
 
 @app.route("/dashboard/admin")
 @login_required(role='admin')
 def admin_dashboard():
     user = session['user']
-    # Add logic to fetch admin-specific data or show admin controls
     return render_template("admin_dashboard.html", user=user)
 
-# --- API Endpoints (Example for Student Marks) ---
-# You might not need separate API endpoints if you render data directly in Flask templates,
-# but they can be useful for dynamic updates or if you keep some JS-driven parts.
+# --- Placeholder Routes for Teacher/Admin Actions ---
 
-@app.route("/api/student/marks")
-@login_required(role='student')
-def api_get_student_marks():
-    user = session['user']
-    roll_no = user.get('roll_no')
-    marks_table = get_marks_table_for_student(roll_no)
+@app.route("/teacher/attendance")
+@login_required(role='teacher')
+def mark_attendance_page():
+     flash("Attendance marking not yet implemented.", "info")
+     return redirect(url_for('teacher_dashboard'))
 
-    if not marks_table:
-        return jsonify({"error": "Could not determine marks table"}), 400
+@app.route("/teacher/marks")
+@login_required(role='teacher')
+def enter_marks_page():
+     flash("Marks entry not yet implemented.", "info")
+     return redirect(url_for('teacher_dashboard'))
 
-    url = get_supabase_rest_url(marks_table)
-    # Select specific columns needed by the frontend
-    params = {'select': 'subject_code,credits,mid1,mid2,endsem,final_grade,internal_marks', 'roll_no': f'eq.{roll_no}'}
+@app.route("/teacher/students")
+@login_required(role='teacher')
+def view_student_profiles_page():
+     flash("Student profile view not yet implemented.", "info")
+     return redirect(url_for('teacher_dashboard'))
 
-    try:
-        response = requests.get(url, headers=SUPABASE_HEADERS, params=params)
-        response.raise_for_status()
-        marks_data = response.json()
-        return jsonify(marks_data), 200
-    except requests.exceptions.RequestException as e:
-        print(f"API Error fetching marks for {roll_no}: {e}")
-        return jsonify({"error": f"Failed to fetch marks: {e}"}), 500
-    except json.JSONDecodeError:
-         print(f"API Error decoding marks JSON for {roll_no}")
-         return jsonify({"error": "Failed to decode marks data"}), 500
+@app.route("/admin/attendance")
+@login_required(role='admin')
+def admin_mark_attendance_page():
+     flash("Admin attendance management not yet implemented.", "info")
+     return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/marks")
+@login_required(role='admin')
+def admin_enter_marks_page():
+     flash("Admin marks management not yet implemented.", "info")
+     return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/users")
+@login_required(role='admin')
+def manage_users_page():
+     flash("User management not yet implemented.", "info")
+     return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/courses")
+@login_required(role='admin')
+def manage_courses_page():
+     flash("Course management not yet implemented.", "info")
+     return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/events")
+@login_required(role='admin')
+def manage_events_page():
+     flash("Event management not yet implemented.", "info")
+     return redirect(url_for('admin_dashboard'))
+
 
 # --- Error Handling ---
 @app.errorhandler(404)
 def page_not_found(e):
+    print(f"404 Error: {e}")
     return render_template('404.html'), 404
 
 @app.errorhandler(500)
 def internal_server_error(e):
+    print(f"Internal Server Error: {e}")
     return render_template('500.html'), 500
-
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    # In production, use a proper WSGI server like Gunicorn or Waitress
-    # Example: gunicorn -w 4 app:app
-    app.run(debug=True, port=5000) # debug=True is for development ONLY
+    app.run(debug=True, port=5000)
+
