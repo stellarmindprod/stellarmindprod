@@ -1,0 +1,5 @@
+Flask>=2.0
+requests>=2.20
+Werkzeug>=2.0 # For password hashing
+
+Add other dependencies like gunicorn for production

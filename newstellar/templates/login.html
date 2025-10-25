@@ -1,338 +1,173 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stellar Mind | Login</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+{% extends "layout.html" %}
+
+{% block title %}Login - StellarMind Prod{% endblock %}
+
+{% block head %}
+    {{ super() }} <!-- Include base styles from layout.html -->
     <style>
-        /* Reset */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        /* Using Inter as per standard guidelines, though original used Segoe UI */
-        body {
-            font-family: "Inter", sans-serif;
-            background: #f7f9fc;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #333;
-        }
-
-        /* Login container */
         .login-container {
-            background: #fff;
-            padding: 40px 30px;
-            border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(74, 144, 226, 0.1); /* Slightly enhanced shadow */
-            width: 360px;
-            max-width: 90%; /* Responsive consideration */
+            max-width: 400px;
+            margin: 2rem auto; /* Reduced top margin */
+            padding: 2.5rem;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
             text-align: center;
-            animation: fadeInUp 1s ease forwards;
-            opacity: 0;
-            border: 1px solid #e0e0e0;
         }
-
-        @keyframes fadeInUp {
-            from {
-                transform: translateY(30px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+        .login-container .logo-icon { /* Optional: Add an icon if no image */
+            font-size: 3rem;
+            color: #0d6efd; /* Bootstrap blue */
+            margin-bottom: 1rem;
         }
-
-        /* Logo */
-        .logo img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            margin-bottom: 15px;
-            object-fit: cover;
-            /* Placeholder image since original URL might fail */
-            content: url(https://placehold.co/80x80/4a90e2/ffffff?text=SM);
-        }
-
-        /* Title */
         .login-container h1 {
-            margin-bottom: 10px;
-            color: #222;
-            font-size: 24px;
+            margin-bottom: 0.5rem;
+            color: #212529; /* Darker text */
+            font-size: 1.8rem;
         }
-
-        .login-container h1 i {
-            margin-right: 8px;
-            color: #4a90e2;
+        .login-container .subtitle {
+            color: #6c757d; /* Bootstrap muted */
+            margin-bottom: 2rem;
+            font-size: 1rem;
         }
-
-        .subtitle {
-            font-size: 14px;
-            margin-bottom: 25px;
-            color: #666;
-        }
-
-        /* Input group */
         .input-group {
-            display: flex;
-            align-items: center;
-            background: #f0f0f5;
-            margin: 15px 0;
-            padding: 14px;
-            border-radius: 10px;
-            transition: box-shadow 0.3s, background-color 0.3s;
-            border: 1px solid transparent;
+            margin-bottom: 1.25rem;
+            position: relative;
+            text-align: left; /* Align icon and input */
         }
-
-        .input-group:focus-within {
-            background: #fff;
-            border-color: #4a90e2;
-            box-shadow: 0 0 8px rgba(74, 144, 226, 0.3);
-        }
-
         .input-group i {
-            margin-right: 12px;
-            color: #888;
-            transition: color 0.3s;
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #adb5bd; /* Lighter icon */
+            pointer-events: none; /* Make icon unclickable */
         }
-
-        .input-group:focus-within i {
-            color: #4a90e2;
-        }
-
         .input-group input {
-            flex: 1;
-            border: none;
-            background: transparent;
-            outline: none;
-            color: #333;
-            font-size: 15px;
-        }
-
-        /* Link below password */
-        .forgot-password-link {
-            text-align: right;
-            margin-top: -10px;
-            margin-bottom: 15px;
-        }
-        
-        .forgot-password-link a {
-            font-size: 13px;
-            color: #4a90e2;
-            text-decoration: none;
-            transition: text-decoration 0.2s;
-        }
-
-        .forgot-password-link a:hover {
-            text-decoration: underline;
-        }
-
-        /* Button Styles */
-        .btn {
-            display: inline-block;
-            background: #4a90e2;
-            color: #fff;
-            padding: 14px 25px;
-            border-radius: 30px;
-            font-weight: 600;
-            border: none;
-            margin-top: 20px;
-            cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
             width: 100%;
-            font-size: 16px;
+            padding: 12px 12px 12px 40px; /* Adjusted padding for icon */
+            border: 1px solid #ced4da; /* Bootstrap border */
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box; /* Include padding in width */
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .input-group input:focus {
+             border-color: #86b7fe; /* Focus color */
+             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); /* Focus shadow */
+             outline: none;
+        }
+        .options-group {
+            display: flex;
+            justify-content: flex-end; /* Align link to the right */
+            align-items: center; /* Vertical alignment */
+            margin-top: -0.5rem; /* Pull up slightly */
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .forgot-password-link a {
+            color: #0d6efd;
             text-decoration: none;
-            box-shadow: 0 4px 10px rgba(74, 144, 226, 0.4);
         }
-
-        .btn:hover {
-            background: #357abd;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(74, 144, 226, 0.5);
+         .forgot-password-link a:hover {
+            text-decoration: underline;
+         }
+        .btn-login { /* Specific class for login button */
+            width: 100%;
+            padding: 12px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
         }
-        .btn:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 5px rgba(74, 144, 226, 0.3);
+        .btn-login:hover {
+            background-color: #0b5ed7;
         }
-
-        /* Secondary Button for Teacher Signup */
-        .btn.btn-secondary {
-            background: #e9f2fc;
-            color: #357abd;
-            margin-top: 10px;
-            box-shadow: none;
-            border: 1px solid #4a90e2;
-            font-weight: 500;
+         .btn-login:active {
+            transform: scale(0.98); /* Click effect */
         }
-
-        .btn.btn-secondary:hover {
-            background: #dbe8f8;
-            border-color: #357abd;
-            transform: translateY(-1px);
-        }
-
-        /* Signup link */
         .signup-link {
-            margin-top: 25px;
-            font-size: 14px;
-            color: #666;
+            margin-top: 2rem;
+            color: #6c757d;
+            font-size: 0.95rem;
         }
-
         .signup-link a {
-            color: #4a90e2;
+            color: #0d6efd;
+            font-weight: 600;
             text-decoration: none;
-            font-weight: bold;
         }
-
         .signup-link a:hover {
             text-decoration: underline;
         }
-
-        /* Message */
-        #login-message {
-            margin-top: 15px;
-            min-height: 20px;
-            font-size: 14px;
-            font-weight: 500;
+        /* Ensure flash messages have enough space */
+        .login-container .flash-messages {
+             margin-top: 1.5rem;
+             margin-bottom: 0; /* Reset margin if needed */
         }
 
-        /* Responsive Adjustments */
-        @media (max-width: 400px) {
+        @media (max-width: 480px) {
             .login-container {
-                margin: 20px;
+                padding: 1.5rem;
+                margin: 1rem;
             }
+            .login-container h1 { font-size: 1.6rem; }
+            .input-group input { padding: 10px 10px 10px 35px; }
+            .btn-login { font-size: 1rem; padding: 10px; }
         }
+
     </style>
-</head>
-<body>
+{% endblock %}
 
-    <div class="login-container">
-        <div class="logo">
-            <!-- Placeholder logo URL -->
-            <img src="https://placehold.co/80x80/4a90e2/ffffff?text=SM" alt="Stellar Mind Logo" onerror="this.onerror=null; this.src='https://placehold.co/80x80/4a90e2/ffffff?text=SM'">
+{% block content %}
+<div class="login-container">
+     <div class="logo-icon"><i class="fas fa-brain"></i></div> <!-- Simple Icon -->
+    <h1>Login</h1>
+    <p class="subtitle">Access your StellarMind Prod account</p>
+
+    <!-- Display Flash Messages (moved inside container) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login_page') }}">
+        <div class="input-group">
+            <input type="text" id="username" name="username" placeholder="Roll No / Username" required aria-label="Username or Roll Number">
+             <i class="fas fa-user"></i>
         </div>
-        
-        <h1><i class="fa-solid fa-user-secret"></i> Welcome Back</h1>
-        <p class="subtitle">Login to explore your Stellar Mind</p>
+        <div class="input-group">
+            <input type="password" id="password" name="password" placeholder="Password" required aria-label="Password">
+             <i class="fas fa-lock"></i>
+        </div>
+        <div class="options-group">
+             <span class="forgot-password-link">
+                <a href="{{ url_for('forgot_password_page') }}">Forgot Password?</a>
+             </span>
+        </div>
+        <button type="submit" class="btn-login">Login</button>
+    </form>
 
-        <form id="login-form">
-            <div class="input-group">
-                <i class="fas fa-user"></i>
-                <input type="text" id="username" placeholder="Institute Roll Number / Username" required>
-            </div>
+    <p class="signup-link">
+        Don't have an account? <a href="{{ url_for('signup_page') }}">Sign Up</a>
+        <!-- Add Teacher signup link if needed -->
+        <!-- | <a href="{{ url_for('teacher_signup_page') }}">Teacher Signup</a> -->
+    </p>
+</div>
+{% endblock %}
 
-            <div class="input-group">
-                <i class="fas fa-lock"></i>
-                <input type="password" id="password" placeholder="Password" required>
-            </div>
-            
-            <p class="forgot-password-link">
-                <!-- Links should be relative to your project structure -->
-                <a href="/forget.html">Forgot Password?</a>
-            </p>
-
-            <button type="submit" class="btn">Login</button>
-            <p id="login-message"></p>
-        </form>
-
-        <p class="signup-link">
-            Not registered yet? <a href="/signup.html">Sign Up</a>
-        </p>
-
-        <!-- Link updated to relative path -->
-        <a href="/teacher_signup/teacher.html" class="btn btn-secondary">Sign up as a Teacher</a>
-    </div>
-
+{% block scripts %}
+    {{ super() }} <!-- Include base scripts from layout.html if any -->
     <script>
-        document.getElementById("login-form").addEventListener("submit", async (e) => {
-            e.preventDefault();
-
-            const username = document.getElementById("username").value.trim();
-            const password = document.getElementById("password").value.trim();
-            const message = document.getElementById("login-message");
-
-            message.textContent = "⏳ Logging in...";
-            message.style.color = "#4a90e2";
-            
-            // Disable button while processing
-            const loginButton = e.target.querySelector('button[type="submit"]');
-            loginButton.disabled = true;
-
-            // Map batch names to academic year names
-            const batchToYearMap = {
-                'b1': '1st Year Student',
-                'b2': '2nd Year Student',
-                'b3': '3rd Year Student',
-                'b4': '4th Year Student'
-            };
-
-            try {
-                // Fetch to the Flask backend API endpoint
-                const response = await fetch("/api/login", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ username, password }),
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    const userData = result.user;
-                    const role = userData.role || 'student';
-                    let successMessage = `✅ Success! Logged in as ${role}. Redirecting...`;
-                    
-                    if (role === 'student' && userData.batch) {
-                        const batch = userData.batch; // e.g., 'b1', 'b2'
-                        const yearText = batchToYearMap[batch] || 'Student';
-
-                        // Update success message to include the year in green
-                        successMessage = `✅ Logged in as <span style="font-weight: 700;">${yearText}</span>. Redirecting...`;
-                    } else if (role === 'teacher') {
-                         successMessage = `✅ Logged in as <span style="font-weight: 700;">Teacher</span>. Redirecting...`;
-                    } else if (role === 'admin') {
-                        successMessage = `✅ Logged in as <span style="font-weight: 700;">Admin</span>. Redirecting...`;
-                    }
-
-                    // Store user data in localStorage (batch is already included in userData from Flask)
-                    localStorage.setItem("user", JSON.stringify(userData));
-
-                    // Display success message with green color
-                    message.innerHTML = successMessage;
-                    message.style.color = "#28a745"; // Green success color
-
-                    // Redirect based on role (adjust paths as needed in your Flask app)
-                    setTimeout(() => {
-                        if (role === "admin") {
-                            window.location.href = "/admin_dashboard.html";
-                        } else if (role === "teacher") {
-                            window.location.href = "/teacher_dashboard.html";
-                        } else {
-                            // Default for student
-                            window.location.href = "/student_dashboard.html";
-                        }
-                    }, 1200);
-
-                } else {
-                    // Handle server-side failure messages
-                    const errorMessage = result.message || "Login failed. Please check your credentials.";
-                    throw new Error(errorMessage);
-                }
-
-            } catch (err) {
-                console.error("Login failed:", err.message);
-                message.textContent = `❌ ${err.message}`;
-                message.style.color = "#dc3545"; // Red error color
-                loginButton.disabled = false; // Re-enable button
-            }
-        });
+        // Minimal JS for potential future enhancements like show/hide password
+        // Login logic itself is handled by Flask.
     </script>
-</body>
-</html>
+{% endblock %}
+

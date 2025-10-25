@@ -1,0 +1,203 @@
+{% extends "layout.html" %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block head %}
+    {{ super() }} <!-- Include base styles -->
+    <style>
+        .dashboard-container { padding: 1rem; }
+        .welcome-banner {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1c2b3a;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.1);
+        }
+        .welcome-banner h1 { margin: 0; font-size: 1.8rem; font-weight: 600; }
+        .welcome-banner p { margin-top: 0.25rem; font-size: 1.1rem; color: #334e68; }
+        .welcome-banner span { font-weight: 500; font-family: monospace; } /* Style roll no/batch */
+
+        .section { margin-bottom: 2.5rem; }
+        .section h2 {
+            font-size: 1.6rem;
+            color: #0056b3;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 2px solid #ddeafd;
+            font-weight: 600;
+        }
+        .table-responsive { overflow-x: auto; } /* Make tables scrollable on small screens */
+
+        .marks-table, .grades-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07);
+            border: 1px solid #eaf1f7;
+        }
+        .marks-table th, .marks-table td, .grades-table th, .grades-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6; /* Bootstrap border */
+            vertical-align: middle;
+        }
+        .marks-table th, .grades-table th {
+            background-color: #e9ecef; /* Bootstrap thead */
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+         /* Align numbers to the right */
+        .marks-table td:not(:first-child), .grades-table td:not(:first-child) {
+            text-align: right;
+            font-family: monospace; /* Monospace for numbers */
+            font-size: 0.95rem;
+        }
+        .marks-table td:nth-child(1), .grades-table td:nth-child(1) { /* Subject code/Semester name */
+             font-weight: 500;
+             color: #212529; /* Darker text */
+        }
+
+        .marks-table tr:last-child td, .grades-table tr:last-child td { border-bottom: none; }
+        .marks-table tr:hover, .grades-table tr:hover { background-color: #f8f9fa; } /* Light hover */
+
+        .no-data {
+            text-align: center;
+            padding: 1.5rem;
+            color: #6c757d;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            font-style: italic;
+        }
+        .cgpa-highlight {
+            font-weight: bold;
+            color: #0d6efd; /* Bootstrap blue */
+            font-size: 1.1em;
+            text-align: right; /* Ensure CGPA aligns right */
+        }
+        .cgpa-label {
+             text-align: right !important; /* Ensure label aligns right */
+             font-weight: bold;
+             color: #212529;
+        }
+         @media (max-width: 600px) {
+             .marks-table td:not(:first-child), .grades-table td:not(:first-child),
+             .cgpa-highlight { font-size: 0.9rem; } /* Slightly smaller numbers on mobile */
+             .marks-table th, .grades-table th { font-size: 0.8rem; }
+             th, td { padding: 8px 10px; }
+             .welcome-banner h1 { font-size: 1.5rem; }
+             .welcome-banner p { font-size: 1rem; }
+             .section h2 { font-size: 1.4rem; }
+         }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="welcome-banner">
+        <h1>Welcome, {{ user.student_name or user.username }}!</h1>
+        <p>Roll Number: <span>{{ user.roll_no }}</span> | Batch: <span>{{ user.batch.upper() if user.batch else 'N/A' }}</span></p>
+    </div>
+
+    <!-- Grades Section -->
+    <div class="section">
+        <h2>Semester Grades (SGPA) & CGPA</h2>
+        {% if grades %}
+            <div class="table-responsive">
+                <table class="grades-table">
+                    <thead>
+                        <tr>
+                            <th>Semester</th>
+                            <th>SGPA</th>
+                            <th>Total Credits</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set has_grades = false %}
+                        {% for i in range(1, 9) %}
+                            {% set sem_key = 'sem' + i|string %}
+                            {% if sem_key in grades and (grades[sem_key].sgpa is not none or grades[sem_key].credits is not none) %}
+                                {% set has_grades = true %}
+                                <tr>
+                                    <td>Semester {{ i }}</td>
+                                    <td>{{ '%.2f'|format(grades[sem_key].sgpa|float) if grades[sem_key].sgpa is not none else '-' }}</td>
+                                    <td>{{ grades[sem_key].credits if grades[sem_key].credits is not none else '-' }}</td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not has_grades and grades.cgpa is none %}
+                             <tr><td colspan="3" class="no-data">No grade data available yet.</td></tr>
+                        {% endif %}
+                        {% if grades.cgpa is not none %}
+                            <tr>
+                                <td colspan="2" class="cgpa-label">Cumulative GPA (CGPA):</td>
+                                <td class="cgpa-highlight">{{ '%.2f'|format(grades.cgpa|float) }}</td>
+                            </tr>
+                        {% else %}
+                             <!-- Optionally show if CGPA is missing but SGPA exists -->
+                             {% if has_grades %}
+                                <tr><td colspan="3" class="no-data">CGPA not calculated yet.</td></tr>
+                             {% endif %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="no-data">Grades data not available yet.</p>
+        {% endif %}
+    </div>
+
+
+    <!-- Marks Section -->
+    <div class="section">
+        <h2>Course Marks</h2>
+        {% if marks %}
+            <div class="table-responsive">
+                <table class="marks-table">
+                    <thead>
+                        <tr>
+                            <th>Subject Code</th>
+                            <th>Midterm 1</th>
+                            <th>Midterm 2</th>
+                            <th>End Sem</th>
+                            <th>Internal</th>
+                            <th>Final Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mark in marks %}
+                        <tr>
+                            <td>{{ mark.subject_code }}</td>
+                            <td>{{ mark.mid1 if mark.mid1 is not none else '-' }}</td>
+                            <td>{{ mark.mid2 if mark.mid2 is not none else '-' }}</td>
+                            <td>{{ mark.endsem if mark.endsem is not none else '-' }}</td>
+                            <td>{{ mark.internal_marks if mark.internal_marks is not none else '-' }}</td>
+                            <td>{{ mark.final_grade if mark.final_grade else '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="no-data">No marks found for your current courses.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="no-data">No marks details available.</p>
+        {% endif %}
+    </div>
+
+    <!-- Future Sections: Attendance, Courses, Backlogs etc. -->
+    <!--
+    <div class="section">
+        <h2>Attendance Summary</h2>
+        <p class="no-data">Attendance data coming soon...</p>
+        </div>
+    -->
+
+</div>
+{% endblock %}
+
