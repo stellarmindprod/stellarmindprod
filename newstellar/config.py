@@ -44,4 +44,3 @@ SUPABASE_HEADERS = {
 
 # --- Flask App Configuration ---
 SECRET_KEY = "your_very_secret_flask_key_change_this" # Change this for production! Use a strong, random key.
-

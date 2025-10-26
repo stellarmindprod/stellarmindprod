@@ -1,0 +1,378 @@
+{% extends "layout.html" %}
+
+{% block title %}Student Marks{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Supabase -->
+  <script src="https://unpkg.com/@supabase/supabase-js"></script>
+
+  <style>
+    /* Light theme variables */
+    :root {
+      --primary-bg: #f0f4f8;
+      --secondary-bg: #ffffff;
+      --card-bg: #eaf1f7;
+      --text-color: #1c2b3a;
+      --subtle-text: #6b7a8c;
+      --accent-start: #4299e1;
+      --accent-end: #0087c5;
+      --shadow-light: rgba(0, 0, 0, 0.08);
+      --shadow-heavy: rgba(0, 0, 0, 0.15);
+      --transition-speed: 0.5s;
+    }
+
+    /* Main Content Styling */
+    .marks-page {
+      padding: 2rem 1%; /* Adjusted padding */
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 1.5rem;
+    }
+
+    .marks-hero h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-color);
+    }
+
+    .marks-hero .sub {
+      font-size: 1.1rem;
+      color: var(--subtle-text);
+      margin-bottom: 2rem;
+    }
+
+    /* Gradient Welcome Text */
+    .gradient-text {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+    }
+
+
+    /* Tabs Styling */
+    .tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      background: var(--card-bg);
+      border: 1px solid transparent;
+      padding: 0.75rem 1.5rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-color);
+      transition: all 0.3s ease;
+      font-size: 1rem;
+    }
+
+    .tab-btn:hover {
+      background: #dbe8f3;
+      transform: translateY(-2px);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(66, 153, 225, 0.3);
+    }
+
+    /* Marks Table Styling */
+    #marks-area {
+      min-height: 200px;
+    }
+
+    .marks-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      background: var(--secondary-bg);
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 4px 20px var(--shadow-light);
+    }
+
+    .marks-table thead th {
+      text-align: left;
+      padding: 1rem 1.25rem;
+      background: var(--card-bg);
+      font-weight: 700;
+      color: var(--text-color);
+      border-bottom: 2px solid #dde8f0;
+    }
+
+    .marks-table tbody td {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid #eaf1f7;
+      color: var(--subtle-text);
+      font-weight: 500;
+    }
+
+    .marks-table tbody tr:hover {
+      background-color: #f8fafc;
+    }
+
+    .marks-table tbody td:first-child {
+      color: var(--text-color);
+      font-weight: 600;
+    }
+
+
+    /* Uploading Soon / Loading state */
+    .status-message {
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 600;
+      padding: 2rem;
+      border-radius: 1rem;
+      background: var(--card-bg);
+      color: var(--subtle-text);
+      box-shadow: 0 4px 15px var(--shadow-light);
+    }
+
+    .status-message a {
+      color: var(--accent-start);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+
+    /* Responsive Table */
+    @media (max-width: 720px) {
+      .marks-page {
+        padding: 2rem 5%;
+      }
+
+      .marks-hero h1,
+      .gradient-text {
+        font-size: 1.8rem;
+      }
+
+      .marks-table thead {
+        display: none;
+      }
+
+      .marks-table tbody,
+      .marks-table tr,
+      .marks-table td {
+        display: block;
+        width: 100%;
+      }
+
+      .marks-table tr {
+        margin-bottom: 1rem;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        box-shadow: 0 2px 10px var(--shadow-light);
+      }
+
+      .marks-table td {
+        /* Use flexbox for a cleaner, more reliable alignment */
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border: none;
+        border-bottom: 1px solid #eaf1f7;
+      }
+
+      .marks-table td::before {
+        content: attr(data-label);
+        /* Ensure the label has a consistent visual position and size */
+        flex-shrink: 0;
+        font-weight: 700;
+        color: var(--text-color);
+        /* Set a min-width to prevent collision on very small screens */
+        min-width: 45%;
+        padding-right: 1rem;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <main class="marks-page">
+    <section class="marks-hero">
+      <h1 id="welcome-student" class="gradient-text">Welcome!</h1>
+      <h1>📊 Your Marks</h1>
+      <p class="sub">View Mid Term 1, Mid Term 2 and End Semester marks for your subjects.</p>
+    </section>
+
+    <section class="marks-controls">
+      <div class="tabs">
+        <button class="tab-btn" data-exam="mid1">Mid Term 1</button>
+        <button class="tab-btn" data-exam="mid2">Mid Term 2</button>
+        <button class="tab-btn" data-exam="endsem">End Semester</button>
+        <button class="tab-btn" data-exam="final_grade">Final Grade</button>
+      </div>
+    </section>
+
+    <section id="marks-area">
+      <div id="marks-loading" class="status-message">Loading marks...</div>
+    </section>
+  </main>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    // --- Data passed from Flask ---
+    const SUPABASE_URL = "{{ supabase_url | safe }}";
+    const SUPABASE_KEY = "{{ supabase_key | safe }}";
+    const STUDENT_ROLL_NO = "{{ user.roll_no | safe }}";
+    const STUDENT_NAME = "{{ (user.student_name or user.roll_no) | safe }}";
+    const MARKS_TABLE = "{{ marks_table | safe }}";
+    const COURSE_TABLE = "courses"; // Assuming 'courses' is the table name
+
+    // --- Initialize Supabase client ---
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // --- Global state ---
+    let subjectData = {
+        marks: [],
+        courseMap: new Map()
+    };
+
+    // --- DOM Elements ---
+    const welcomeStudentEl = document.getElementById("welcome-student");
+    const marksArea = document.getElementById('marks-area');
+
+    // --- Functions ---
+
+    /**
+     * Sets up the click listeners for the tabs
+     */
+    function setupTabs() {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderMarks(btn.dataset.exam);
+        });
+      });
+      // Set the first tab as active by default
+      const firstTab = document.querySelector('.tab-btn[data-exam="mid1"]');
+      if (firstTab) {
+          firstTab.classList.add('active');
+      }
+    }
+
+    /**
+     * Fetches marks and course data from Supabase
+     */
+    async function loadInitialData() {
+        if (!STUDENT_ROLL_NO || !MARKS_TABLE) {
+            marksArea.innerHTML = `<div class="status-message">⚠️ Could not find student data.</div>`;
+            return;
+        }
+
+        try {
+            // Fetch marks
+            const { data: marksData, error: marksError } = await supabase
+                .from(MARKS_TABLE)
+                .select('subject_code, mid1, mid2, endsem, final_grade')
+                .eq('roll_no', STUDENT_ROLL_NO);
+
+            if (marksError) throw marksError;
+
+            // Fetch course names
+            const { data: coursesData, error: coursesError } = await supabase
+                .from(COURSE_TABLE)
+                .select('course_code, course_name');
+            
+            if (coursesError) throw coursesError;
+
+            // Create a map for easy lookup
+            subjectData.courseMap = new Map(coursesData.map(course => [course.course_code, course.course_name]));
+            subjectData.marks = marksData;
+
+            // Initial render
+            renderMarks("mid1"); // Render "Mid Term 1" by default
+
+        } catch (error) {
+            console.error(error);
+            marksArea.innerHTML = `<div class="status-message">⚠️ Error loading marks. Please try again later.</div>`;
+        }
+    }
+
+    /**
+     * Renders the marks table for a specific exam type
+     * @param {string} examType - The key for the marks (e.g., "mid1", "mid2", "endsem")
+     */
+    function renderMarks(examType) {
+        if (!subjectData.marks || subjectData.marks.length === 0) {
+            marksArea.innerHTML = `<div class="status-message">No marks uploaded till now.</div>`;
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'marks-table';
+        
+        // Determine header based on exam type
+        const marksHeader = (examType === 'final_grade') ? 'Grade' : 'Marks';
+        
+        table.innerHTML = `
+            <thead>
+              <tr>
+                <th>Subject Code</th>
+                <th>Subject Name</th>
+                <th>${marksHeader}</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+
+        const tbody = table.querySelector('tbody');
+        let hasMarks = false;
+
+        subjectData.marks.forEach(row => {
+            const code = row.subject_code;
+            const name = subjectData.courseMap.get(code) || 'Unknown Subject';
+            const mark = row[examType] ?? '-'; // Get the mark for the selected exam
+            
+            if (mark !== null && mark !== '-') { // Check for null as well
+                hasMarks = true;
+            }
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td data-label="Code">${code}</td>
+              <td data-label="Subject">${name}</td>
+              <td data-label="${marksHeader}">${mark}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        marksArea.innerHTML = ''; // Clear loading message
+        marksArea.appendChild(table);
+
+        if (!hasMarks) {
+             marksArea.innerHTML = `<div class="status-message">Marks for this exam have not been uploaded yet.</div>`;
+        }
+    }
+
+    // --- Initial Load ---
+    document.addEventListener("DOMContentLoaded", () => {
+        if (welcomeStudentEl) {
+            welcomeStudentEl.textContent = `Welcome, ${STUDENT_NAME}`;
+        }
+        
+        setupTabs();
+        loadInitialData();
+    });
+
+  </script>
+{% endblock %}
+

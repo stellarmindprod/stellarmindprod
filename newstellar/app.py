@@ -11,7 +11,7 @@ from functools import wraps
 from config import (
     SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
     MARKS_TABLES, SECRET_KEY, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-    ATTENDANCE_TABLES, SUPABASE_ANON_KEY # Added ATTENDANCE_TABLES & ANON_KEY
+    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE # Added COURSE_TABLE
 )
 
 # Initialize Flask App
@@ -23,8 +23,9 @@ app.config['SECRET_KEY'] = SECRET_KEY
 def get_supabase_rest_url(table_name):
     """Constructs the Supabase REST API URL for a table."""
     # Basic validation to prevent unintended table access
-    allowed_tables = STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [ # Added ATTENDANCE_TABLES
-        TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE
+    allowed_tables = STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
+        TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
+        COURSE_TABLE # Added COURSE_TABLE
     ] # Add other valid tables
     if table_name not in allowed_tables:
          raise ValueError(f"Access to table '{table_name}' is not permitted.")
@@ -467,8 +468,30 @@ def student_attendance_page():
 @app.route("/student/marks")
 @login_required(role='student')
 def student_marks_page():
-     flash("Student marks page coming soon!", "info")
-     return redirect(url_for('index'))
+    user = session.get('user')
+    if not user or user.get('role') != 'student':
+        flash("You must be logged in as a student to view this page.", "danger")
+        return redirect(url_for('login_page'))
+    
+    roll_no = user.get('roll_no')
+    if not roll_no:
+        flash("Could not identify student roll number.", "danger")
+        return redirect(url_for('index'))
+
+    # Use the existing helper function to get the correct marks table
+    marks_table = get_marks_table_for_student(roll_no) 
+
+    if not marks_table:
+        flash("Could not determine marks records for your batch.", "warning")
+        return redirect(url_for('index'))
+
+    return render_template(
+        "marks.html", # Render the new marks.html template
+        user=user, 
+        marks_table=marks_table, # Pass the correct marks table name
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
+    )
 
 
 # --- Placeholder Routes for Teacher/Admin Actions (Kept) ---
@@ -536,4 +559,3 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
-
