@@ -1,0 +1,549 @@
+{% extends "layout.html" %}
+
+{% block title %}Attendance Dashboard{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Supabase -->
+    <script src="https://unpkg.com/@supabase/supabase-js"></script>
+
+    <style>
+        /* Light theme variables from index.html */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --transition-speed: 0.5s;
+        }
+
+        /* Override layout.html's navbar styling for this page if needed */
+        /* We'll use the layout.html navbar, so no extra navbar CSS needed here */
+
+        .hero {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .hero-text h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .hero-text p {
+            margin-top: 0.5rem;
+            color: var(--subtle-text);
+            font-size: 1.1rem;
+        }
+
+        #studentName {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+            animation: gradientFlow 4s infinite linear;
+            background-size: 200% auto;
+        }
+
+        @keyframes gradientFlow {
+            0% {
+                background-position: 0% center;
+            }
+
+            100% {
+                background-position: 200% center;
+            }
+        }
+
+        .attendance-section {
+            padding: 1rem 1rem 3rem;
+            text-align: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .attendance-section h2 {
+            margin-bottom: 2rem;
+            font-size: 1.8rem;
+        }
+
+        .subject-info-container {
+            background: var(--secondary-bg);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            max-width: 1000px; /* Changed from 800px */
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .subject-info-container h3 {
+            margin-bottom: 1rem;
+            color: var(--text-color);
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .subject-list {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            padding-left: 0;
+            text-align: left;
+        }
+
+        .subject-list li {
+            background: var(--card-bg);
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--subtle-text);
+            text-align: left;
+        }
+        
+        .subject-code {
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        
+        .subject-percent {
+            font-weight: 700;
+            color: var(--accent-end);
+        }
+
+        .chart-container {
+            background: var(--secondary-bg);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin: 0 auto 2rem;
+            max-width: 1000px; /* Changed from 800px */
+            box-shadow: 0 8px 30px var(--shadow-light);
+            height: 400px; /* Give chart a fixed height */
+            position: relative;
+        }
+
+        .month-changer {
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .month-changer button {
+            background: var(--secondary-bg);
+            color: var(--text-color);
+            border: 1px solid #ddd;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+
+        .month-changer button:hover {
+            background: var(--card-bg);
+            border-color: #ccc;
+        }
+
+        #currentMonth {
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+
+        .toggle-btn {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            color: #fff;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .toggle-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 135, 197, 0.4);
+        }
+
+        .attendance-grid {
+            margin-top: 2rem;
+            overflow-x: auto;
+            background: var(--secondary-bg);
+            border-radius: 1.5rem;
+            padding: 1rem;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .attendance-table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 600px;
+            table-layout: fixed;
+        }
+
+        .attendance-table th,
+        .attendance-table td {
+            border: 1px solid #e0e0e0;
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .attendance-table th {
+            background: var(--card-bg);
+            font-weight: 600;
+        }
+
+        .attendance-table td {
+            background: var(--secondary-bg);
+        }
+
+        .attendance-table td.present span.status {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .attendance-table td.absent span.status {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        /* Mobile-specific styles for better readability and full-width chart */
+        @media (max-width: 768px) {
+            .hero-text h1 {
+                font-size: 1.8rem;
+            }
+
+            #studentName {
+                font-size: 1.5rem;
+                /* Keep gradient on mobile */
+            }
+
+            .chart-container {
+                max-width: 100%;
+                padding: 1rem 0.5rem;
+                border-radius: 0.5rem;
+                height: 300px; /* Adjust height for mobile */
+            }
+
+            .attendance-table th,
+            .attendance-table td {
+                padding: 0.5rem;
+                font-size: 0.8rem;
+            }
+
+            .attendance-table th {
+                white-space: normal;
+            }
+
+            .subject-list {
+                grid-template-columns: 1fr; /* Stack items on top of each other */
+                text-align: left;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-text">
+            <h1>Welcome, <span id="studentName">Loading...</span></h1>
+            <p>Your Academic Progress at a Glance</p>
+        </div>
+    </section>
+
+    <!-- Attendance Section -->
+    <section class="attendance-section">
+        <h2>Your Attendance Summary</h2>
+
+        <div class="subject-info-container" id="subjectInfo">
+            <h3>Subject Codes & Names</h3>
+            <ul class="subject-list" id="subjectList">
+                <!-- Subject list will be dynamically populated here -->
+            </ul>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="attendanceChart"></canvas>
+        </div>
+
+        <div class="month-changer">
+            <button id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+            <span id="currentMonth">Loading...</span>
+            <button id="nextMonth"><i class="fas fa-chevron-right"></i></button>
+        </div>
+
+        <button id="toggleViewBtn" class="toggle-btn">See Attendance by Day</button>
+
+        <div class="attendance-grid" id="attendanceGrid" style="display:none;">
+            <table class="attendance-table">
+                <thead id="attendanceHead"></thead>
+                <tbody id="attendanceBody"></tbody>
+            </table>
+        </div>
+    </section>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        // Data passed from Flask
+        const SUPABASE_URL = "{{ supabase_url | safe }}";
+        const SUPABASE_KEY = "{{ supabase_key | safe }}";
+        const STUDENT_ROLL_NO = "{{ user.roll_no | safe }}";
+        const STUDENT_NAME = "{{ (user.student_name or user.roll_no) | safe }}";
+        const ATTENDANCE_TABLE = "{{ attendance_table | safe }}";
+
+        // Initialize Supabase client
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const studentNameEl = document.getElementById("studentName");
+        const attendanceHead = document.getElementById("attendanceHead");
+        const attendanceBody = document.getElementById("attendanceBody");
+        const toggleBtn = document.getElementById("toggleViewBtn");
+        const attendanceGrid = document.getElementById("attendanceGrid");
+        const attendanceChartCanvas = document.getElementById("attendanceChart");
+        const subjectListEl = document.getElementById("subjectList");
+
+        let currentMonth = new Date();
+        let tableVisible = false;
+
+        async function loadAttendance(username) {
+            const {
+                data,
+                error
+            } = await supabaseClient
+                .from(ATTENDANCE_TABLE) // Use the dynamic table name
+                .select("subject_name, subject_code, status, total_classes")
+                .eq("roll_no", username); // Filter by roll_no
+
+            if (error) {
+                console.error("Error loading attendance:", error);
+                return;
+            }
+
+            const subjectData = {};
+            data.forEach(record => {
+                const subjectIdentifier = record.subject_code; // Use subject_code as the unique key
+                if (!subjectData[subjectIdentifier]) {
+                    subjectData[subjectIdentifier] = {
+                        name: record.subject_name,
+                        code: record.subject_code,
+                        attended: 0,
+                        total: 0
+                    };
+                }
+                subjectData[subjectIdentifier].attended += record.status;
+                subjectData[subjectIdentifier].total += record.total_classes;
+            });
+
+            renderSubjectList(subjectData);
+            renderBarChart(subjectData);
+            loadAttendanceTable(currentMonth); // Load table for the current month
+        }
+
+        function renderSubjectList(subjectData) {
+            const subjects = Object.values(subjectData);
+            if (subjects.length === 0) {
+                 subjectListEl.innerHTML = "<li>No subject data found.</li>";
+                 return;
+            }
+            subjectListEl.innerHTML = subjects.map(sub => {
+                const percentage = sub.total > 0 ? ((sub.attended / sub.total) * 100).toFixed(1) : 0;
+                return `<li><span class="subject-code">${sub.code}</span>: ${sub.name} <br> <span class="subject-percent">${percentage}%</span></li>`;
+            }).join('');
+        }
+
+        let myChart;
+
+        function renderBarChart(subjectData) {
+            const subjects = Object.values(subjectData);
+            const subjectCodes = subjects.map(sub => sub.code); // Use subject code for labels
+            const percentages = subjects.map(sub => {
+                const attended = sub.attended;
+                const total = sub.total;
+                return total > 0 ? ((attended / total) * 100).toFixed(1) : 0;
+            });
+            const colors = percentages.map(p => p >= 75 ? "rgba(39, 174, 96, 0.8)" : "rgba(231, 76, 60, 0.8)");
+            
+            if (myChart) myChart.destroy();
+
+            if (!attendanceChartCanvas) return;
+            const ctx = attendanceChartCanvas.getContext('2d');
+            
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: subjectCodes, // Use subject code here
+                    datasets: [{
+                        label: 'Attendance %',
+                        data: percentages,
+                        backgroundColor: colors,
+                        borderColor: percentages.map(p => p >= 75 ? "rgba(39, 174, 96, 1)" : "rgba(231, 76, 60, 1)"),
+                        borderWidth: 1,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                color: '#6b7a8c'
+                            },
+                            grid: {
+                                color: '#e0e0e0'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#6b7a8c'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const subject = subjects[context.dataIndex];
+                                    if (!subject) return "No data";
+                                    // Update tooltip to show both name and code
+                                    return `${subject.name} (${subject.code}): ${subject.attended}/${subject.total} (${context.raw}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadAttendanceTable(month) {
+            const username = STUDENT_ROLL_NO;
+            if (!username) return;
+
+            const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString().split("T")[0];
+            const end = new Date(month.getFullYear(), month.getMonth() + 1, 0).toISOString().split("T")[0];
+
+            const {
+                data: monthData,
+                error
+            } = await supabaseClient
+                .from(ATTENDANCE_TABLE) // Use dynamic table
+                .select("*")
+                .eq("roll_no", username) // Use roll_no
+                .gte("date", start)
+                .lte("date", end)
+                .order("date", {
+                    ascending: true
+                });
+
+            updateMonthLabel();
+
+            if (error) {
+                console.error("Error loading table data:", error);
+                attendanceBody.innerHTML = `<tr><td colspan="10">⚠️ Error loading data</td></tr>`;
+            } else if (!monthData || monthData.length === 0) {
+                attendanceHead.innerHTML = '<tr><th>Date</th><th>Status</th></tr>';
+                attendanceBody.innerHTML = `<tr><td colspan="2">No records found for this month.</td></tr>`;
+            } else {
+                const subjects = [...new Set(monthData.map(r => r.subject_name))];
+                const dates = [...new Set(monthData.map(r => r.date))].sort();
+
+                if (subjects.length === 0) {
+                    attendanceHead.innerHTML = '<tr><th>Date</th><th>Status</th></tr>';
+                    attendanceBody.innerHTML = `<tr><td colspan="2">No records found for this month.</td></tr>`;
+                    return;
+                }
+
+                attendanceHead.innerHTML = `<tr><th>Date</th>${subjects.map(sub => `<th>${sub}</th>`).join("")}</tr>`;
+
+                attendanceBody.innerHTML = dates.map(date => {
+                    const rowCells = subjects.map(sub => {
+                        const record = monthData.find(r => r.date === date && r.subject_name === sub);
+
+                        if (!record) return `<td>-</td>`;
+
+                        const statusChar = record.status > 0 ? "P" : "A";
+                        const statusText = `${statusChar} (${record.status}/${record.total_classes})`;
+                        const statusClass = record.status > 0 ? "present" : "absent";
+
+                        return `<td class="${statusClass}"><span class="status">${statusText}</span></td>`;
+                    }).join("");
+
+                    // Format date as DD/MM/YYYY
+                    const d = new Date(date + 'T00:00:00'); // Ensure correct date parsing
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    
+                    return `<tr><td>${day}/${month}/${year}</td>${rowCells}</tr>`;
+                }).join("");
+            }
+        }
+        
+        document.getElementById("prevMonth").addEventListener("click", () => {
+            currentMonth.setMonth(currentMonth.getMonth() - 1);
+            loadAttendanceTable(currentMonth);
+        });
+
+        document.getElementById("nextMonth").addEventListener("click", () => {
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+            loadAttendanceTable(currentMonth);
+        });
+
+        function updateMonthLabel() {
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            document.getElementById("currentMonth").textContent = `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
+        }
+
+        toggleBtn.addEventListener("click", () => {
+            tableVisible = !tableVisible;
+            attendanceGrid.style.display = tableVisible ? "block" : "none";
+            toggleBtn.textContent = tableVisible ? "Hide Daily Attendance" : "See Attendance by Day";
+        });
+
+        // Initial load
+        if (studentNameEl) {
+            studentNameEl.textContent = STUDENT_NAME;
+        }
+        if (STUDENT_ROLL_NO && ATTENDANCE_TABLE) {
+            loadAttendance(STUDENT_ROLL_NO);
+        } else {
+            console.error("User data or attendance table not provided from Flask.");
+            if (studentNameEl) {
+                studentNameEl.textContent = "Error";
+            }
+            if(subjectListEl) {
+                subjectListEl.innerHTML = "<li>Could not load user data.</li>";
+            }
+        }
+
+    </script>
+{% endblock %}
+

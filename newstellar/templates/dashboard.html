@@ -316,7 +316,8 @@
             color: var(--text-color);
         }
 
-        .hero-text h1 span {
+        /* MODIFICATION: Changed 'h1 span' to 'h1 span.brand-gradient' */
+        .hero-text h1 span.brand-gradient {
             background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -915,7 +916,8 @@
     <section class="hero">
         <div class="hero-text">
             <h1>
-                Welcome to <span>Stellar Mind</span><br>
+                <!-- MODIFICATION: Added class="brand-gradient" to this span -->
+                Welcome to <span class="brand-gradient">Stellar Mind</span><br>
                 <!-- Display user's name if logged in -->
                 {% if session.user %}
                     {% set display_name = session.user.student_name or session.user.teacher_name or session.user.username %}
@@ -1114,4 +1116,3 @@
     </script>
 </body>
 </html>
-

@@ -18,8 +18,10 @@ COURSE_TABLE = "courses"
 GRADES_TABLE = "grades"
 BACKLOG_TABLE = "backlogs"
 MARKS_TABLES = ["marks1", "marks2", "marks3", "marks4"]
+ATTENDANCE_TABLES = ["attendance1", "attendance2", "attendance3", "attendance4"] # For batch-specific attendance
+
 # Assumed table names based on old project files (add these to your DB)
-ATTENDANCE_TABLE = "attendance"
+ATTENDANCE_TABLE = "attendance" # General/old table, keep for reference or other uses
 EVENTS_TABLE = "events"
 HOLIDAYS_TABLE = "holidays"
 
@@ -42,3 +44,4 @@ SUPABASE_HEADERS = {
 
 # --- Flask App Configuration ---
 SECRET_KEY = "your_very_secret_flask_key_change_this" # Change this for production! Use a strong, random key.
+
