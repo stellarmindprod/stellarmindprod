@@ -322,6 +322,37 @@
             -webkit-text-fill-color: transparent;
         }
 
+        /* Role Badge Style */
+        .role-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border-radius: 1rem;
+            color: #fff !important; /* Explicitly set white text color */
+            -webkit-text-fill-color: white; /* Override potential gradient inheritance */
+            background-clip: padding-box !important; /* Ensure background isn't clipped to text */
+            margin-left: 0.5rem;
+            animation: fadeInScale 0.5s 0.5s ease-in-out forwards;
+            opacity: 0;
+            transform: scale(0.9);
+            vertical-align: middle; /* Aligns badge with the username text */
+        }
+
+        /* Different colors for different roles */
+        .role-badge.student {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            
+        }
+        .role-badge.teacher {
+            background: linear-gradient(90deg, #34d399, #10b981); /* Green */
+        }
+        .role-badge.admin {
+            background: linear-gradient(90deg, #f87171, #ef4444); /* Red */
+        }
+        /* End of Role Badge Style */
+
         .hero-text p {
             font-size: 1.1rem;
             line-height: 1.6;
@@ -889,6 +920,15 @@
                 {% if session.user %}
                     {% set display_name = session.user.student_name or session.user.teacher_name or session.user.username %}
                     <span id="welcome-user" class="gradient-username">Hi, {{ display_name }} 👋</span>
+                    
+                    <!-- Stylish Role Badge -->
+                    {% if session.user.role == 'student' and session.user.batch %}
+                        <span class="role-badge student">{{ session.user.batch }}</span>
+                    {% elif session.user.role == 'teacher' %}
+                        <span class="role-badge teacher">{{ session.user.role }}</span>
+                    {% elif session.user.role == 'admin' %}
+                        <span class="role-badge admin">{{ session.user.role }}</span>
+                    {% endif %}
                 {% endif %}
             </h1>
             <p>
@@ -1074,3 +1114,4 @@
     </script>
 </body>
 </html>
+
