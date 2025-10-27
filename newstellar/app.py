@@ -314,7 +314,15 @@ def login_page():
                             user_data.get('teacher_name') or
                             user_data.get('username', 'User'))
             flash(f"Welcome back, {display_name}!", "success")
-            return redirect(url_for('index')) # Redirect to the NEW dashboard
+            
+            # --- START OF MODIFICATION ---
+            # Check the user's role and redirect accordingly
+            if user_data.get('role') == 'admin':
+                return redirect(url_for('admin_dashboard')) # Redirect admins to admin dashboard
+            else:
+                return redirect(url_for('index')) # Redirect all other users to main dashboard
+            # --- END OF MODIFICATION ---
+
         else:
             flash("Invalid credentials. Please try again.", "danger")
             return render_template("login.html"), 401
@@ -616,6 +624,17 @@ def admin_mark_attendance_page():
 def admin_enter_marks_page():
      flash("Admin marks management not yet implemented.", "info")
      return redirect(url_for('index'))
+
+@app.route("/admin/dashboard")
+@login_required(role='admin')
+def admin_dashboard():
+    """Renders the admin-specific dashboard."""
+    user = session.get('user')
+    return render_template("admin_dashboard.html", user=user)
+
+
+# --- Placeholder Routes for Teacher/Admin Actions (Kept) ---
+# ... (your other admin routes like /admin/attendance follow)
 
 @app.route("/admin/users")
 @login_required(role='admin')
