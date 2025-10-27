@@ -797,6 +797,7 @@
         
         /**
          * Saves the current grid data to the database.
+         * WORKAROUND: Deletes existing records for the day, then inserts new ones.
          */
         async function saveAttendance() {
             if (!currentSubjectCode || !currentAttendanceTable) {
@@ -813,27 +814,25 @@
             const totalClasses = parseInt(totalClassesInput.value, 10) || 1;
 
             try {
-                const recordsToUpsert = [];
+                const recordsToInsert = [];
                 let errorFound = false;
                 
                 rows.forEach(row => {
                     if (errorFound) return;
                     const rollNo = row.dataset.roll; 
-                    // const studentName = row.dataset.name; // Not needed for saving
                     const status = parseInt(row.querySelector('.status-input').value, 10);
                     
                     if (status > totalClasses) {
                         createCustomModal(`Attendance for ${rollNo.toUpperCase()} cannot exceed total classes.`);
                         errorFound = true;
                     }
-                    recordsToUpsert.push({
+                    recordsToInsert.push({
                         roll_no: rollNo, 
-                        // student_name: studentName, // REMOVED - not in attendance table
                         date: date,
                         status: status,
                         total_classes: totalClasses,
                         subject_code: currentSubjectCode,
-                        subject_name: currentSubjectName // Keep subject_name if it exists in the table (check a.txt)
+                        subject_name: currentSubjectName 
                     });
                 });
 
@@ -841,16 +840,27 @@
                     throw new Error("Invalid attendance count detected.");
                 }
 
-                // Check a.txt again: attendance1-4 DO have subject_name
-                // So, we keep subject_name in the upsert object.
-
-                const { error } = await supabaseClient
+                // --- START: Workaround Logic ---
+                saveStatus.textContent = '⏳ Deleting old records for this day...';
+                
+                // 1. Delete all records for this subject and date
+                const { error: deleteError } = await supabaseClient
                     .from(currentAttendanceTable)
-                    .upsert(recordsToUpsert, {
-                        onConflict: 'roll_no, date, subject_code' // Use roll_no
-                    });
+                    .delete()
+                    .eq('date', date)
+                    .eq('subject_code', currentSubjectCode);
+                    
+                if (deleteError) throw deleteError;
+                
+                saveStatus.textContent = '⏳ Inserting new records...';
+                
+                // 2. Insert the new records
+                const { error: insertError } = await supabaseClient
+                    .from(currentAttendanceTable)
+                    .insert(recordsToInsert);
 
-                if (error) throw error;
+                if (insertError) throw insertError;
+                // --- END: Workaround Logic ---
 
                 saveStatus.textContent = '✅ Attendance saved successfully!';
                 setTimeout(() => saveStatus.textContent = '', 4000);
@@ -858,12 +868,7 @@
             } catch (error) {
                 console.error('Error saving attendance:', error);
                 saveStatus.textContent = `⚠️ Error: ${error.message}`;
-                 // Provide more specific feedback if possible
-                 if (error.message.includes('column') && error.message.includes('does not exist')) {
-                     createCustomModal(`Database Error: A column mentioned in the code might be missing from the table '${currentAttendanceTable}'. Please check the schema.`);
-                 } else {
-                     createCustomModal(`Error saving attendance: ${error.message}`);
-                 }
+                createCustomModal(`Error saving attendance: ${error.message}`);
             } finally {
                 saveBtn.disabled = false;
             }
@@ -1135,4 +1140,3 @@
 
     </script>
 {% endblock %}
-

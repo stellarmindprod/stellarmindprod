@@ -499,8 +499,52 @@ def student_marks_page():
 @app.route("/teacher/attendance")
 @login_required(role='teacher')
 def mark_attendance_page():
-     flash("Attendance marking not yet implemented.", "info")
-     return redirect(url_for('index'))
+    """
+    Renders the teacher attendance marking page.
+    Fetches courses assigned to the logged-in teacher.
+    """
+    user = session.get('user')
+    # Use 'username' from session, as 'teacher_name' might be the full name
+    teacher_username = user.get('username') 
+
+    if not teacher_username:
+        flash("Could not identify teacher username. Please log in again.", "danger")
+        return redirect(url_for('login_page'))
+
+    all_assigned_courses = []
+    try:
+        # Fetch courses assigned to this teacher from the 'courses' table
+        url = get_supabase_rest_url(COURSE_TABLE)
+        # Assumes 'assisting_teacher' column stores the teacher's 'username'
+        params = {'select': 'course_code,course_name,semester', 'assisting_teacher': f'eq.{teacher_username}'}
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status() # Raise an exception for bad status codes
+        all_assigned_courses = response.json()
+        
+        if not all_assigned_courses:
+             flash(f"You are not currently assigned to any courses. (Checked 'assisting_teacher' column for username: '{teacher_username}').", "warning")
+             # Still render the page, JS will show "No subjects"
+             
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching courses for teacher {teacher_username}: {e}")
+        flash("Error loading your assigned courses.", "danger")
+        # Render the page anyway, JS will handle empty list
+    except ValueError as e:
+        # This catches get_supabase_rest_url error if COURSE_TABLE is not allowed
+        print(f"Configuration error: {e}")
+        flash("Server configuration error trying to access courses.", "danger")
+        return redirect(url_for('index'))
+
+    # Render the actual template, passing in all the data the JS needs
+    return render_template(
+        "teacher_attendance.html",
+        user=user,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY,
+        # Pass the lists as JSON strings for the template to safely embed
+        all_assigned_courses_json=json.dumps(all_assigned_courses),
+        attendance_tables_json=json.dumps(ATTENDANCE_TABLES) 
+    )
 
 @app.route("/teacher/marks")
 @login_required(role='teacher')
