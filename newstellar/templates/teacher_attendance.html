@@ -522,6 +522,7 @@
         const attendanceTables = {{ attendance_tables_json | safe }};
         
         // NEW: Updated mapping per user request
+        // This map links the selected semester to the correct attendance table
         const ATTENDANCE_TABLE_MAP = {
             1: attendanceTables[0], // attendance1
             2: attendanceTables[0], // attendance1
@@ -534,6 +535,7 @@
         };
         
         // NEW: Updated mapping per user request
+        // This map links the selected semester to the correct student table (b1, b2, etc.)
         const STUDENT_TABLE_MAP = {
             1: "b1",
             2: "b1",
@@ -663,7 +665,7 @@
                 // Semester is now read from the selected subject's data attribute
                 currentSemester = selectedOption.dataset.semester ? parseInt(selectedOption.dataset.semester, 10) : null;
                 
-                // Set the correct tables based on semester
+                // Set the correct tables based on semester using the maps
                 currentAttendanceTable = currentSemester ? ATTENDANCE_TABLE_MAP[currentSemester] : null;
                 currentStudentTable = currentSemester ? STUDENT_TABLE_MAP[currentSemester] : null;
                 
@@ -730,9 +732,9 @@
             saveStatus.textContent = 'Building grid...';
             
             try {
-                // 1. Fetch students for this batch (semester)
+                // 1. Fetch students for this batch (semester) using the correct table
                 const { data: studentsData, error: studentsError } = await supabaseClient
-                    .from(currentStudentTable)
+                    .from(currentStudentTable) // Uses the variable set in handleSubjectChange
                     .select('roll_no, student_name');
 
                 if (studentsError) throw studentsError;
@@ -763,7 +765,7 @@
 
                 // 3. Fetch existing attendance records for this date and subject
                 const { data: existingAtt, error } = await supabaseClient
-                    .from(currentAttendanceTable)
+                    .from(currentAttendanceTable) // Uses the correct attendance table
                     .select('roll_no, status, total_classes')
                     .eq('date', attDate.value)
                     .eq('subject_code', currentSubjectCode);
