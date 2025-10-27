@@ -257,3 +257,10 @@ ALTER COLUMN mid2 TYPE NUMERIC(5, 2),
 ALTER COLUMN endsem TYPE NUMERIC(5, 2),
 ALTER COLUMN internal_marks TYPE NUMERIC(5, 2);
 
+
+CREATE TABLE admin (
+    username VARCHAR(100) PRIMARY KEY,
+    password TEXT NOT NULL,
+    name VARCHAR(255),
+    email VARCHAR(255) UNIQUE
+);

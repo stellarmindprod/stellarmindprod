@@ -623,11 +623,230 @@ def manage_users_page():
      flash("User management not yet implemented.", "info")
      return redirect(url_for('index'))
 
+# --- START: COURSE MANAGEMENT ROUTES ---
+
 @app.route("/admin/courses")
 @login_required(role='admin')
 def manage_courses_page():
-     flash("Course management not yet implemented.", "info")
-     return redirect(url_for('index'))
+    """Renders the course management page with a list of courses."""
+    courses = []
+    
+    # --- NEW: Search Logic ---
+    search_params = {
+        'select': '*',
+        'order': 'semester.asc,course_name.asc'
+    }
+    # Get search terms from query string (e.g., /admin/courses?search_name=Intro)
+    search_code = request.args.get('search_code', '').strip()
+    search_name = request.args.get('search_name', '').strip()
+    search_teacher = request.args.get('search_teacher', '').strip()
+    search_semester = request.args.get('search_semester', '').strip()
+
+    # Add filters to params if they exist
+    # 'ilike' is case-insensitive 'like' (partial match)
+    if search_code:
+        search_params['course_code'] = f'ilike.%{search_code}%'
+    if search_name:
+        search_params['course_name'] = f'ilike.%{search_name}%'
+    if search_teacher:
+        search_params['assisting_teacher'] = f'ilike.%{search_teacher}%'
+    if search_semester:
+        search_params['semester'] = f'eq.{search_semester}' # 'eq' is exact match
+
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        
+        # Use the built 'search_params' dictionary
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=search_params, timeout=10)
+        response.raise_for_status() 
+        
+        courses = response.json()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching courses: {e}")
+        flash("Could not load courses from the database.", "danger")
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for('admin_dashboard'))
+        
+    # Pass 'request.args' to the template to pre-fill search fields
+    return render_template("manage_courses.html", courses=courses, search_params=request.args)
+
+
+@app.route('/admin/courses/add', methods=['POST'])
+@login_required(role='admin')
+def add_course():
+    """Handles the form submission for adding a new course."""
+    if request.method == 'POST':
+        # Get data from form
+        course_code = request.form.get('course_code', "").strip().upper()
+        course_name = request.form.get('course_name', "").strip()
+        assisting_teacher = request.form.get('assisting_teacher', "").strip()
+        credits = request.form.get('credits')
+        semester = request.form.get('semester')
+
+        # Basic validation
+        if not all([course_code, course_name, credits, semester]):
+            flash('Course Code, Name, Credits, and Semester are required.', 'danger')
+            return redirect(url_for('manage_courses_page'))
+
+        new_course_data = {
+            "course_code": course_code,
+            "course_name": course_name,
+            "assisting_teacher": assisting_teacher if assisting_teacher else None,
+            "credits": int(credits),
+            "semester": int(semester)
+        }
+
+        try:
+            url = get_supabase_rest_url(COURSE_TABLE)
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+            
+            response = requests.post(url, headers=headers, json=new_course_data, timeout=10)
+            response.raise_for_status()
+
+            if response.status_code == 201:
+                flash(f'Course "{course_name}" added successfully!', 'success')
+            else:
+                flash(f'Received unexpected status: {response.status_code}', 'warning')
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 409:
+                flash(f'Error: Course code "{course_code}" already exists.', 'danger')
+            else:
+                error_details = e.response.json().get('message', 'Unknown error')
+                flash(f'Error adding course: {error_details}', 'danger')
+                print(f"Supabase add course error: {e.response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error inserting course: {e}")
+            flash("Adding course failed due to a network or server error.", "danger")
+        except ValueError as e:
+            flash(str(e), "danger") 
+        except Exception as e:
+            print(f"Unexpected error adding course: {e}")
+            flash("An unexpected error occurred.", "danger")
+
+    return redirect(url_for('manage_courses_page'))
+
+
+@app.route('/admin/courses/delete/<string:course_code>', methods=['POST'])
+@login_required(role='admin')
+def delete_course(course_code):
+    """Handles the POST request to delete a course."""
+    if request.method == 'POST':
+        try:
+            url = get_supabase_rest_url(COURSE_TABLE)
+            params = {'course_code': f'eq.{course_code}'}
+            
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+
+            response = requests.delete(url, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            
+            flash(f'Course "{course_code}" deleted successfully.', 'success')
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error deleting course: {e}")
+            flash("Deleting course failed due to a network or server error.", "danger")
+        except ValueError as e:
+            flash(str(e), "danger")
+        except Exception as e:
+            print(f"Unexpected error deleting course: {e}")
+            flash("An unexpected error occurred.", "danger")
+
+    return redirect(url_for('manage_courses_page'))
+
+
+# --- NEW: EDIT AND UPDATE ROUTES ---
+
+@app.route('/admin/courses/edit/<string:course_code>')
+@login_required(role='admin')
+def edit_course_page(course_code):
+    """Shows the form to edit a specific course."""
+    course = None
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        # Select the specific course by its code
+        params = {'select': '*', 'course_code': f'eq.{course_code}'}
+        
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if data and len(data) == 1:
+            course = data[0]
+            return render_template("edit_course.html", course=course)
+        else:
+            flash(f"Course '{course_code}' not found.", 'danger')
+            return redirect(url_for('manage_courses_page'))
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching course {course_code}: {e}")
+        flash("Could not load course data for editing.", "danger")
+        return redirect(url_for('manage_courses_page'))
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for('manage_courses_page'))
+
+
+@app.route('/admin/courses/update', methods=['POST'])
+@login_required(role='admin')
+def update_course():
+    """Handles the form submission for updating an existing course."""
+    if request.method == 'POST':
+        # Get data from form
+        course_code = request.form.get('course_code') # From hidden input
+        course_name = request.form.get('course_name', "").strip()
+        assisting_teacher = request.form.get('assisting_teacher', "").strip()
+        credits = request.form.get('credits')
+        semester = request.form.get('semester')
+
+        if not all([course_code, course_name, credits, semester]):
+            flash('All fields are required.', 'danger')
+            return redirect(url_for('edit_course_page', course_code=course_code))
+
+        # Data to update
+        update_data = {
+            "course_name": course_name,
+            "assisting_teacher": assisting_teacher if assisting_teacher else None,
+            "credits": int(credits),
+            "semester": int(semester)
+        }
+
+        try:
+            url = get_supabase_rest_url(COURSE_TABLE)
+            # Use params to specify WHICH row to update
+            params = {'course_code': f'eq.{course_code}'}
+            
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+
+            # Send a PATCH request with the update_data
+            response = requests.patch(url, headers=headers, params=params, json=update_data, timeout=10)
+            response.raise_for_status()
+
+            flash(f'Course "{course_name}" updated successfully!', 'success')
+            return redirect(url_for('manage_courses_page'))
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error updating course: {e}")
+            flash("Updating course failed due to a network or server error.", 'danger')
+        except ValueError as e:
+            flash(str(e), "danger")
+        except Exception as e:
+            print(f"Unexpected error updating course: {e}")
+            flash("An unexpected error occurred.", 'danger')
+
+        # If anything fails, redirect back to the edit page
+        return redirect(url_for('edit_course_page', course_code=course_code))
+
+    return redirect(url_for('manage_courses_page'))
+
+
+# --- END: COURSE MANAGEMENT ROUTES ---
 
 @app.route("/admin/events")
 @login_required(role='admin')
