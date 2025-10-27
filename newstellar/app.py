@@ -11,7 +11,7 @@ from functools import wraps
 from config import (
     SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
     MARKS_TABLES, SECRET_KEY, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE # Added COURSE_TABLE
+    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE
 )
 
 # Initialize Flask App
@@ -32,34 +32,38 @@ def get_supabase_rest_url(table_name):
     return f"{SUPABASE_URL}/rest/v1/{table_name}"
 
 def determine_student_batch(roll_no):
-    """Determines the batch table (b1-b4) based on roll number prefix."""
+    """
+    Determines the batch table (b1-b4) based on roll number.
+    This logic now maps semester 1/2 -> b1, 3/4 -> b2, 5/6 -> b3, 7/8 -> b4.
+    We need a way to get semester from roll_no, or we must change this.
+
+    Let's use the old logic from your JS:
+    b25... -> b1 (1st Year)
+    b24... -> b2 (2nd Year)
+    b23... -> b3 (3rd Year)
+    b22... -> b4 (4th Year)
+    """
     if not roll_no or len(roll_no) < 2:
         return None
     
-    # Updated logic to be more robust, e.g., 'b24...' -> 'b4'
-    # This assumes 'b' followed by year digit
-    year_prefix_char = roll_no.lower()[1] 
+    roll_lower = roll_no.lower()
     
-    # Assuming 'b21...' is 'b1', 'b22...' is 'b2', 'b23...' is 'b3', 'b24...' is 'b4'
-    # This logic seems brittle. Let's try a different assumption based on the user's JS:
-    # The JS logic checks for 'b2400' specifically.
-    
-    # Let's use the logic from the old file: 'b24...' maps to b24 schedule.
-    # And your tables are b1, b2, b3, b4.
-    # We'll assume for now b1 = 1st year, b2 = 2nd year, etc.
-    # And b24... is 2nd year ('b2')
-    # A more robust mapping is needed, but for now:
-    
-    if roll_no.lower().startswith('b24'): # 2nd Year
-        return 'b2'
-    if roll_no.lower().startswith('b23'): # 3rd Year
-        return 'b3'
-    if roll_no.lower().startswith('b22'): # 4th Year
-        return 'b4'
-    if roll_no.lower().startswith('b25'): # 1st Year
+    if roll_lower.startswith('b25'): # 1st Year
         return 'b1'
+    if roll_lower.startswith('b24'): # 2nd Year
+        return 'b2'
+    if roll_lower.startswith('b23'): # 3rd Year
+        return 'b3'
+    if roll_lower.startswith('b22'): # 4th Year
+        return 'b4'
         
-    print(f"Warning: Could not determine batch for roll_no: {roll_no}")
+    print(f"Warning: Could not determine batch table for roll_no: {roll_no}")
+    # Fallback for other formats, maybe just check first two chars?
+    if roll_lower.startswith('b1'): return 'b1'
+    if roll_lower.startswith('b2'): return 'b2'
+    if roll_lower.startswith('b3'): return 'b3'
+    if roll_lower.startswith('b4'): return 'b4'
+
     return None # Return None if no match
 
 def get_marks_table_for_student(roll_no):
@@ -127,6 +131,7 @@ def fetch_and_verify_user(username, password):
                     user_data.pop('student_password', None) 
                     user_data['role'] = 'student'
                     user_data['batch'] = batch_table 
+                    user_data['roll_no'] = user_data.get('roll_no', username_lower) # Ensure roll_no is set
                     return user_data
         except Exception as e:
             print(f"Error querying {batch_table}: {e}")
@@ -143,6 +148,7 @@ def fetch_and_verify_user(username, password):
             if check_password_hash(user_data.get('teacher_password', ''), password):
                 user_data.pop('teacher_password', None)
                 user_data['role'] = 'teacher'
+                user_data['username'] = user_data.get('username', username_lower) # Ensure username is set
                 return user_data
     except Exception as e:
         print(f"Error querying {TEACHER_TABLE}: {e}")
@@ -169,7 +175,7 @@ def fetch_and_verify_user(username, password):
 
 # Hardcoded Timetable (as from your JS)
 # This should ideally be moved to the database
-b24_timetable = {
+b24_timetable = { # This is 'b2'
     "MON": [
         "09:30 - 10:30 → Digital Logic Design (ECE Faculty) Shed III",
         "10:30 - 11:30 → Computational Mathematics (RS) Shed III",
@@ -348,7 +354,7 @@ def signup_page():
 
         batch_table = determine_student_batch(roll_no)
         if not batch_table:
-            flash("Invalid Roll Number format or year.", "danger")
+            flash("Invalid Roll Number format or year. Must start with b22, b23, b24, or b25.", "danger")
             return render_template("signup.html")
 
         # Check if user already exists
@@ -549,8 +555,47 @@ def mark_attendance_page():
 @app.route("/teacher/marks")
 @login_required(role='teacher')
 def enter_marks_page():
-     flash("Marks entry not yet implemented.", "info")
-     return redirect(url_for('index'))
+    """
+    Renders the teacher marks entry page.
+    Fetches courses assigned to the logged-in teacher.
+    """
+    user = session.get('user')
+    teacher_username = user.get('username') 
+
+    if not teacher_username:
+        flash("Could not identify teacher username. Please log in again.", "danger")
+        return redirect(url_for('login_page'))
+
+    all_assigned_courses = []
+    try:
+        # Fetch courses assigned to this teacher from the 'courses' table
+        url = get_supabase_rest_url(COURSE_TABLE)
+        params = {'select': 'course_code,course_name,semester', 'assisting_teacher': f'eq.{teacher_username}'}
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        all_assigned_courses = response.json()
+        
+        if not all_assigned_courses:
+             flash(f"You are not currently assigned to any courses. (Checked 'assisting_teacher' column for username: '{teacher_username}').", "warning")
+             
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching courses for teacher {teacher_username}: {e}")
+        flash("Error loading your assigned courses.", "danger")
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        flash("Server configuration error trying to access courses.", "danger")
+        return redirect(url_for('index'))
+
+    # Render the new marks template
+    return render_template(
+        "teacher_marks.html", # <-- New Template
+        user=user,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY,
+        # Pass the lists as JSON strings for the template to safely embed
+        all_assigned_courses_json=json.dumps(all_assigned_courses),
+        marks_tables_json=json.dumps(MARKS_TABLES) # <-- Pass MARKS_TABLES
+    )
 
 @app.route("/teacher/students")
 @login_required(role='teacher')

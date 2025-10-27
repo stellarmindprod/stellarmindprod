@@ -208,3 +208,16 @@ CREATE TABLE attendance4 (
     CONSTRAINT fk_student_b4 FOREIGN KEY (roll_no) REFERENCES b4 (roll_no) ON DELETE CASCADE
 );
 CREATE INDEX idx_attendance4_roll_no_date ON attendance4 (roll_no, date);
+
+
+ALTER TABLE marks1
+ADD CONSTRAINT marks1_roll_no_subject_code_key UNIQUE (roll_no, subject_code);
+
+ALTER TABLE marks2
+ADD CONSTRAINT marks2_roll_no_subject_code_key UNIQUE (roll_no, subject_code);
+
+ALTER TABLE marks3
+ADD CONSTRAINT marks3_roll_no_subject_code_key UNIQUE (roll_no, subject_code);
+
+ALTER TABLE marks4
+ADD CONSTRAINT marks4_roll_no_subject_code_key UNIQUE (roll_no, subject_code);
