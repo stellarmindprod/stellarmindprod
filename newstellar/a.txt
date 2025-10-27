@@ -221,3 +221,39 @@ ADD CONSTRAINT marks3_roll_no_subject_code_key UNIQUE (roll_no, subject_code);
 
 ALTER TABLE marks4
 ADD CONSTRAINT marks4_roll_no_subject_code_key UNIQUE (roll_no, subject_code);
+
+
+-- This SQL file updates your marks tables to allow decimal values for marks.
+-- Run these commands in your Supabase SQL Editor.
+
+-- Use NUMERIC(5, 2) to allow numbers like 123.45 (5 total digits, 2 after the decimal).
+-- You can adjust this precision if needed (e.g., NUMERIC(4, 1) for 999.9).
+
+-- Alter marks1 table
+ALTER TABLE marks1
+ALTER COLUMN mid1 TYPE NUMERIC(5, 2),
+ALTER COLUMN mid2 TYPE NUMERIC(5, 2),
+ALTER COLUMN endsem TYPE NUMERIC(5, 2),
+ALTER COLUMN internal_marks TYPE NUMERIC(5, 2);
+
+-- Alter marks2 table
+ALTER TABLE marks2
+ALTER COLUMN mid1 TYPE NUMERIC(5, 2),
+ALTER COLUMN mid2 TYPE NUMERIC(5, 2),
+ALTER COLUMN endsem TYPE NUMERIC(5, 2),
+ALTER COLUMN internal_marks TYPE NUMERIC(5, 2);
+
+-- Alter marks3 table
+ALTER TABLE marks3
+ALTER COLUMN mid1 TYPE NUMERIC(5, 2),
+ALTER COLUMN mid2 TYPE NUMERIC(5, 2),
+ALTER COLUMN endsem TYPE NUMERIC(5, 2),
+ALTER COLUMN internal_marks TYPE NUMERIC(5, 2);
+
+-- Alter marks4 table
+ALTER TABLE marks4
+ALTER COLUMN mid1 TYPE NUMERIC(5, 2),
+ALTER COLUMN mid2 TYPE NUMERIC(5, 2),
+ALTER COLUMN endsem TYPE NUMERIC(5, 2),
+ALTER COLUMN internal_marks TYPE NUMERIC(5, 2);
+

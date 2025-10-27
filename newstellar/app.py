@@ -522,7 +522,8 @@ def mark_attendance_page():
         # Fetch courses assigned to this teacher from the 'courses' table
         url = get_supabase_rest_url(COURSE_TABLE)
         # Assumes 'assisting_teacher' column stores the teacher's 'username'
-        params = {'select': 'course_code,course_name,semester', 'assisting_teacher': f'eq.{teacher_username}'}
+        # MODIFIED: Added 'credits' to the select query
+        params = {'select': 'course_code,course_name,semester,credits', 'assisting_teacher': f'eq.{teacher_username}'}
         response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
         response.raise_for_status() # Raise an exception for bad status codes
         all_assigned_courses = response.json()
@@ -570,7 +571,8 @@ def enter_marks_page():
     try:
         # Fetch courses assigned to this teacher from the 'courses' table
         url = get_supabase_rest_url(COURSE_TABLE)
-        params = {'select': 'course_code,course_name,semester', 'assisting_teacher': f'eq.{teacher_username}'}
+        # MODIFICATION: Added 'credits' to the select query
+        params = {'select': 'course_code,course_name,semester,credits', 'assisting_teacher': f'eq.{teacher_username}'}
         response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
         response.raise_for_status()
         all_assigned_courses = response.json()
