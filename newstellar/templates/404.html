@@ -4,56 +4,277 @@
 
 {% block head %}
     {{ super() }}
-    <style>
-        .error-container {
-            text-align: center;
-            padding: 4rem 1rem;
+     <style>
+        /* Theme variables */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --danger-color: #dc3545; /* Specific for 404 */
+        }
+
+        /* Center the game container */
+        .game-container {
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             justify-content: center;
+             min-height: 85vh; /* Match 500.html */
+             padding: 1rem; /* Match 500.html */
+             box-sizing: border-box;
+        }
+
+
+        /* Tic-Tac-Toe Game Styles */
+        .tic-tac-toe { margin-top: 1rem; padding-top: 1rem; text-align: center; width: 100%; }
+        .tic-tac-toe h3 { font-size: 1.2rem; color: var(--subtle-text); margin-bottom: 1rem; font-weight: 500; }
+
+        /* Significantly Increased game board size - Adjusted Clamp (Matches 500.html) */
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            width: clamp(320px, 95vmin, 450px);
+            height: clamp(320px, 95vmin, 450px);
+            margin: 1.5rem auto;
+            border: 4px solid var(--text-color); /* Match 500.html */
+            border-radius: 12px; /* Match 500.html */
+            overflow: hidden;
+            background-color: var(--card-bg);
+        }
+        /* Significantly Increased cell size and font size - Adjusted Clamp (Matches 500.html) */
+        .cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: clamp(3.5rem, 30vmin, 6.5rem);
+            font-weight: bold;
+            cursor: pointer;
+            border: 3px solid var(--text-color); /* Match 500.html */
+            box-sizing: border-box;
+            transition: background-color 0.2s ease;
+            user-select: none;
+            color: var(--text-color);
+        }
+        .cell:nth-child(3n) { border-right: none; }
+        .cell:nth-child(-n+3) { border-top: none; }
+        .cell:nth-child(n+7) { border-bottom: none; }
+        .cell:nth-child(3n+1) { border-left: none; }
+
+        .cell:hover:not(.occupied) { background-color: #dbe8f3; }
+        .cell.occupied { cursor: not-allowed; }
+        .cell.x { color: var(--accent-end); }
+        .cell.o { color: var(--danger-color); } /* Use danger color for O on 404 */
+
+        .game-status { margin-top: 1rem; font-size: 1.2rem; /* Match 500.html */ font-weight: 500; color: var(--text-color); min-height: 1.5em; }
+
+        /* Container for buttons (Matches 500.html) */
+        .game-controls {
             margin-top: 2rem;
-            background-color: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
         }
-        .error-container h1 {
-            font-size: clamp(3rem, 10vw, 5rem); /* Responsive font size */
-            color: #dc3545; /* Bootstrap danger */
-            margin: 0;
-            font-weight: 700;
-            line-height: 1;
-        }
-        .error-container .error-text {
-             font-size: 1.5rem;
-             color: #212529;
-             margin: 0.5rem 0 1rem;
+
+        /* Larger buttons (Matches 500.html) */
+        .btn-restart, .btn-home-game {
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             padding: 12px 25px;
+             border: none;
+             border-radius: 8px;
+             font-size: 1.1rem;
+             cursor: pointer;
+             transition: background-color 0.3s ease, transform 0.2s ease;
+             width: 240px;
+             box-sizing: border-box;
+             text-decoration: none;
+             gap: 8px;
              font-weight: 500;
         }
-        .error-container p {
-            font-size: 1.1rem;
-            color: #6c757d;
-            margin: 0 0 2rem;
+        .btn-restart {
+             background-color: var(--subtle-text);
+             color: white;
         }
-        .error-container .btn-home { /* Specific class */
-            display: inline-block;
-            padding: 12px 30px;
-            background-color: #0d6efd;
-            color: white;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-            font-size: 1rem;
+         .btn-restart:hover {
+             background-color: var(--text-color);
+             transform: translateY(-2px);
+         }
+
+        .btn-home-game {
+             background-color: var(--accent-start);
+             color: white;
         }
-        .error-container .btn-home:hover {
-            background-color: #0b5ed7;
+        .btn-home-game:hover {
+            background-color: var(--accent-end);
             transform: translateY(-2px);
         }
+
+
     </style>
 {% endblock %}
 
 {% block content %}
-<div class="error-container">
-    <h1>404</h1>
-    <p class="error-text">Page Not Found</p>
-    <p>Oops! The page you are looking for doesn't exist or has been moved.</p>
-    <a href="{{ url_for('index') }}" class="btn-home"><i class="fas fa-home"></i> Go Back Home</a>
+<div class="game-container">
+    <div class="tic-tac-toe">
+        <!-- Adjusted text slightly for 404 context -->
+        <h3>Oops! Page not found. How about a quick game while you're here?</h3>
+        <div id="game-board" class="game-board">
+            <!-- Added &nbsp; to prevent alignment shift -->
+            <div class="cell" data-index="0">&nbsp;</div>
+            <div class="cell" data-index="1">&nbsp;</div>
+            <div class="cell" data-index="2">&nbsp;</div>
+            <div class="cell" data-index="3">&nbsp;</div>
+            <div class="cell" data-index="4">&nbsp;</div>
+            <div class="cell" data-index="5">&nbsp;</div>
+            <div class="cell" data-index="6">&nbsp;</div>
+            <div class="cell" data-index="7">&nbsp;</div>
+            <div class="cell" data-index="8">&nbsp;</div>
+        </div>
+        <div id="game-status" class="game-status">Your turn (X)</div>
+        <div class="game-controls">
+            <button id="restart-button" class="btn-restart"><i class="fas fa-redo"></i> Restart Game</button>
+            <a href="{{ url_for('index') }}" class="btn-home-game"><i class="fas fa-home"></i> Back to Homepage</a>
+        </div>
+    </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <!-- Tic Tac Toe Game Logic with AI (No changes needed here) -->
+    <script>
+        const boardElement = document.getElementById('game-board');
+        const statusElement = document.getElementById('game-status');
+        const restartButton = document.getElementById('restart-button');
+        const cells = document.querySelectorAll('.cell');
+
+        const player = 'X';
+        const computer = 'O';
+        let currentPlayer = player; // Player starts
+        let boardState = Array(9).fill(null);
+        let gameActive = true;
+
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+            [0, 4, 8], [2, 4, 6]             // Diagonals
+        ];
+
+        function handleCellClick(event) {
+            if (currentPlayer !== player || !gameActive) return;
+
+            const clickedCell = event.target;
+            const cellIndex = parseInt(clickedCell.getAttribute('data-index'));
+
+            if (boardState[cellIndex] !== null) return;
+
+            makeMove(cellIndex, player);
+
+            if (gameActive) {
+                 currentPlayer = computer;
+                 statusElement.textContent = `Computer's turn (${computer})...`;
+                 setTimeout(computerMove, 500);
+            }
+        }
+
+        function makeMove(index, symbol) {
+             if (boardState[index] !== null || !gameActive) return false;
+
+             boardState[index] = symbol;
+             cells[index].textContent = symbol;
+             cells[index].classList.add('occupied', symbol.toLowerCase());
+
+             if (checkWinner(symbol)) {
+                 statusElement.textContent = `${symbol === player ? 'You Win!' : 'Computer Wins!'} 🎉`;
+                 gameActive = false;
+                 return true;
+             }
+
+             if (boardState.every(cell => cell !== null)) {
+                 statusElement.textContent = "It's a Draw! 🤝";
+                 gameActive = false;
+                 return true;
+             }
+             return true;
+        }
+
+
+        function computerMove() {
+             if (!gameActive) return;
+            let moveIndex = findBestMove();
+            if (moveIndex !== -1) {
+                makeMove(moveIndex, computer);
+            }
+             if(gameActive) {
+                 currentPlayer = player;
+                 statusElement.textContent = `Your turn (${player})`;
+             }
+        }
+
+        function findBestMove() {
+            // 1. Check if Computer can win
+            for (let i = 0; i < boardState.length; i++) {
+                if (boardState[i] === null) {
+                    boardState[i] = computer;
+                    if (checkWinner(computer)) {
+                        boardState[i] = null; return i;
+                    }
+                    boardState[i] = null;
+                }
+            }
+            // 2. Check if Player can win and block
+            for (let i = 0; i < boardState.length; i++) {
+                if (boardState[i] === null) {
+                    boardState[i] = player;
+                    if (checkWinner(player)) {
+                        boardState[i] = null; return i;
+                    }
+                    boardState[i] = null;
+                }
+            }
+             // 3. Center
+             if (boardState[4] === null) return 4;
+             // 4. Corners
+             const corners = [0, 2, 6, 8];
+             const availableCorners = corners.filter(index => boardState[index] === null);
+             if (availableCorners.length > 0) return availableCorners[Math.floor(Math.random() * availableCorners.length)];
+            // 5. Random
+            const availableCells = boardState.map((cell, index) => (cell === null ? index : null)).filter(index => index !== null);
+            if (availableCells.length > 0) return availableCells[Math.floor(Math.random() * availableCells.length)];
+            return -1;
+        }
+
+        function checkWinner(symbol) {
+            for (const combination of winningCombinations) {
+                const [a, b, c] = combination;
+                if (boardState[a] === symbol && boardState[b] === symbol && boardState[c] === symbol) return true;
+            }
+            return false;
+        }
+
+        function restartGame() {
+            boardState.fill(null);
+            cells.forEach(cell => {
+                cell.innerHTML = '&nbsp;';
+                cell.classList.remove('occupied', 'x', 'o');
+            });
+            currentPlayer = player;
+            statusElement.textContent = `Your turn (${player})`;
+            gameActive = true;
+        }
+
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+        restartButton.addEventListener('click', restartGame);
+        statusElement.textContent = `Your turn (${player})`;
+
+    </script>
+{% endblock %}
+
