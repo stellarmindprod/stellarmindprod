@@ -50,9 +50,9 @@
         }
         /* Significantly Increased cell size and font size - Adjusted Clamp */
         .cell {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            display: flex; /* Keep flex */
+            justify-content: center; /* Keep centering */
+            align-items: center; /* Keep centering */
              /* Adjusted clamp: min 3.5rem, scales up more, max 6.5rem */
             font-size: clamp(3.5rem, 30vmin, 6.5rem);
             font-weight: bold;
@@ -62,6 +62,9 @@
             transition: background-color 0.2s ease;
             user-select: none;
             color: var(--text-color);
+            line-height: 1; /* Explicitly set line-height to prevent font metrics shift */
+            text-align: center; /* Ensure text alignment is centered */
+            position: relative; /* Needed for potential future pseudo-elements */
         }
         .cell:nth-child(3n) { border-right: none; }
         .cell:nth-child(-n+3) { border-top: none; }
