@@ -139,6 +139,11 @@
 
 {% block content %}
 
+<datalist id="teacher-list">
+    {% for teacher in all_teachers %}
+        <option value="{{ teacher.username }}">{{ teacher.teacher_name }}</option>
+    {% endfor %}
+</datalist>
 <div class="page-controls">
     <button id="add-course-btn" class="btn btn-submit-new"><i class="fas fa-plus"></i> Add New Course</button>
     <button id="toggle-search-btn" class="btn btn-secondary-new"><i class="fas fa-search"></i> Toggle Search</button>
@@ -158,7 +163,7 @@
             </div>
             <div class="form-group">
                 <label for="assisting_teacher">Assisting Teacher</label>
-                <input type="text" id="assisting_teacher" name="assisting_teacher" placeholder="e.g., Dr. Smith">
+                <input type="text" id="assisting_teacher" name="assisting_teacher" placeholder="Type or select username" list="teacher-list">
             </div>
             <div class="form-group">
                 <label for="credits">Credits</label>
@@ -187,7 +192,7 @@
             </div>
             <div class="form-group">
                 <label for="search_teacher">Assisting Teacher</label>
-                <input type="text" id="search_teacher" name="search_teacher" placeholder="Contains..." value="{{ search_params.search_teacher or '' }}">
+                <input type="text" id="search_teacher" name="search_teacher" placeholder="Type or select username..." value="{{ search_params.search_teacher or '' }}" list="teacher-list">
             </div>
             <div class="form-group">
                 <label for="search_semester">Semester</label>
