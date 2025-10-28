@@ -1,133 +1,72 @@
 {% extends "layout.html" %}
 
-{% block title %}Admin Dashboard{% endblock %}
+{% block title %}Admin Dashboard - StellarMind Prod{% endblock %}
 
 {% block head %}
     {{ super() }}
+    <!-- Add any Admin-specific styles here -->
     <style>
-        /* CSS Variables from your project's theme */
-        :root {
-            --primary-bg: #f0f4f8;
-            --secondary-bg: #ffffff;
-            --card-bg: #eaf1f7;
-            --text-color: #1c2b3a;
-            --subtle-text: #6b7a8c;
-            
-            /* Main site accent colors (blue) */
-            --accent-start: #4299e1; 
-            --accent-end: #0087c5;
-            
-            /* Consistent shadow from layout.html */
-            --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
-            --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
-        }
-
-        .admin-hero {
-            padding: 2rem 1rem;
-            text-align: center;
-        }
-
-        .admin-hero h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--text-color);
-        }
-
-        /* Use the MAIN site gradient (blue) for the username */
-        .admin-hero .admin-gradient {
-            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .admin-hero p {
-            font-size: 1.1rem;
-            color: var(--subtle-text);
-            margin-top: 0.5rem;
-        }
-
-        .admin-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            padding: 1rem;
-            max-width: 1200px;
-            margin: 1rem auto;
-        }
-
-        .admin-card {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: var(--secondary-bg);
-            border-radius: 8px; /* Matches layout theme */
+        .admin-content {
             padding: 2rem;
-            text-decoration: none;
-            color: var(--text-color);
-            box-shadow: var(--shadow-base); /* Matches layout theme */
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            border: 1px solid transparent;
-        }
-
-        .admin-card:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow-hover);
-            border-color: var(--accent-end); /* Use MAIN blue accent */
-        }
-
-        .admin-card i {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            color: var(--accent-end); /* Use MAIN blue accent */
-        }
-
-        .admin-card h2 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin: 0;
+            background-color: var(--secondary-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px var(--shadow-light);
+            min-height: 300px; /* Example height */
             text-align: center;
-            color: var(--accent-end); /* Use MAIN blue accent */
         }
+        .admin-content h1 {
+            color: var(--text-color);
+            margin-bottom: 1rem;
+        }
+        .admin-content p {
+            color: var(--subtle-text);
+        }
+        /* Make footer styles explicitly available if needed, though they should inherit */
+        /* Footer Styles (Copied from dashboard.html just in case, might be redundant if layout.html handles it) */
+        .footer {
+            background: var(--secondary-bg, #ffffff); /* Use fallback */
+            color: var(--subtle-text, #6b7a8c);
+            text-align: center;
+            padding: 2rem 1rem;
+            margin-top: 3rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            transition: background var(--transition-speed, 0.5s); /* Use fallback */
+        }
+        .footer-content p { margin: 0.3rem 0; }
+        .footer-content a { color: var(--subtle-text, #6b7a8c); text-decoration: none; transition: color var(--transition-speed, 0.5s); }
+        .footer-content a:hover { color: var(--accent-end, #0087c5); }
+        .social-icons { margin-top: 1rem; display: flex; justify-content: center; gap: 1.25rem; }
+        .social-icons a { font-size: 1.5rem; color: var(--subtle-text, #6b7a8c); transition: all var(--transition-speed, 0.5s) ease-in-out; }
+        .social-icons a:hover { color: var(--accent-end, #0087c5); transform: scale(1.2) translateY(-0.25rem); text-shadow: 0 0 1rem rgba(0, 135, 197, 0.7); }
 
     </style>
 {% endblock %}
 
 {% block content %}
-<div class="admin-hero">
-    <h1>Welcome, <span class="admin-gradient">{{ user.username }}</span>!</h1>
-    <p>Manage the StellarMind platform from here.</p>
+<div class="admin-content">
+    <h1>Admin Dashboard</h1>
+    <p>Welcome, Admin! Manage users, courses, events, etc. from here.</p>
+    <!-- Add admin-specific content links/widgets here -->
+
 </div>
+{% endblock %}
 
-<div class="admin-grid">
-    <a href="{{ url_for('manage_users_page') }}" class="admin-card">
-        <i class="fas fa-users-cog"></i>
-        <h2>Manage Users</h2>
-    </a>
+<!-- The footer block is inherited from layout.html, but we ensure the necessary context is passed -->
+<!-- If layout.html doesn't define the footer block, add the explicit footer here -->
+<!-- Forcing explicit footer copy just in case layout.html changes -->
+{% block footer %}
+    <footer class="footer">
+        <div class="footer-content">
+            <!-- Ensure 'now' context processor is available via app.py -->
+            <p>© {{ now.year }} Stellar Mind | NIT Sikkim</p>
+            <p>📞 Contact: <a href="tel:+917908750746">+91 7908750746</a></p>
+            <p><a href="#"><i class="fas fa-file-contract"></i> Terms & Conditions</a></p>
 
-    <a href="{{ url_for('manage_courses_page') }}" class="admin-card">
-        <i class="fas fa-book"></i>
-        <h2>Manage Courses</h2>
-    </a>
-    
-    <a href="{{ url_for('manage_events_page') }}" class="admin-card">
-        <i class="fas fa-calendar-alt"></i>
-        <h2>Manage Events</h2>
-    </a>
-
-    <a href="{{ url_for('admin_enter_marks_page') }}" class="admin-card">
-        <i class="fas fa-clipboard-list"></i>
-        <h2>Manage Marks</h2>
-    </a>
-    
-    <a href="{{ url_for('admin_mark_attendance_page') }}" class="admin-card">
-        <i class="fas fa-user-check"></i>
-        <h2>Manage Attendance</h2>
-    </a>
-
-    <a href="#" class="admin-card">
-        <i class="fas fa-cogs"></i>
-        <h2>Site Settings</h2>
-    </a>
-</div>
+            <div class="social-icons">
+                <a href="https://wa.me/7037796470" target="_blank"><i class="fab fa-whatsapp"></i></a>
+                <a href="https://instagram.com/" target="_blank"><i class="fab fa-instagram"></i></a>
+                <a href="https://linkedin.com/" target="_blank"><i class="fab fa-linkedin"></i></a>
+            </div>
+        </div>
+    </footer>
 {% endblock %}
