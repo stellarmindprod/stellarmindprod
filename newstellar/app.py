@@ -885,6 +885,245 @@ def update_course():
 
 # --- END: COURSE MANAGEMENT ROUTES ---
 
+# --- START: TEACHER MANAGEMENT ROUTES (NEW & CORRECTED) ---
+@app.route("/admin/teachers")
+@login_required(role='admin')
+def manage_teachers_page():
+    """Renders the teacher management page with a list of teachers."""
+    teachers = []
+    
+    search_params = {
+        'select': 'teacher_id,username,teacher_name,department,teacher_email', # Exclude password
+        'order': 'teacher_name.asc'
+    }
+    
+    search_username = request.args.get('search_username', '').strip()
+    search_name = request.args.get('search_name', '').strip()
+
+    if search_username:
+        search_params['username'] = f'ilike.%{search_username}%'
+    if search_name:
+        search_params['teacher_name'] = f'ilike.%{search_name}%'
+
+    try:
+        url = get_supabase_rest_url(TEACHER_TABLE)
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=search_params, timeout=10)
+        response.raise_for_status() 
+        teachers = response.json()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching teachers: {e}")
+        flash("Could not load teachers from the database.", "danger")
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for('admin_dashboard'))
+        
+    return render_template("manage_teacher.html", teachers=teachers, search_params=request.args)
+
+
+@app.route('/admin/teachers/add', methods=['POST'])
+@login_required(role='admin')
+def add_teacher():
+    """Handles the form submission for adding a new teacher."""
+    if request.method == 'POST':
+        username = request.form.get('username', "").strip()
+        teacher_name = request.form.get('teacher_name', "").strip()
+        department = request.form.get('department', "").strip()
+        teacher_email = request.form.get('teacher_email', "").strip().lower()
+        
+        # Use a default password
+        default_password = "password" 
+
+        if not all([username, teacher_name, teacher_email]): 
+            flash('Username, Name, and Email are required.', 'danger')
+            return redirect(url_for('manage_teachers_page'))
+        
+        # Hash the default password
+        hashed_password = generate_password_hash(default_password)
+
+        new_teacher_data = {
+            "username": username,
+            "teacher_name": teacher_name,
+            "department": department if department else None,
+            "teacher_email": teacher_email,
+            "teacher_password": hashed_password # Store the hash of the default password
+        }
+
+        try:
+            url = get_supabase_rest_url(TEACHER_TABLE)
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+            
+            response = requests.post(url, headers=headers, json=new_teacher_data, timeout=10)
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+            # Check status code explicitly after raise_for_status might not be strictly needed,
+            # but doesn't hurt for clarity. raise_for_status handles non-2xx codes.
+            if response.status_code == 201:
+                flash(f'Teacher "{teacher_name}" added successfully with a default password!', 'success')
+            else:
+                # This part might be less likely reached if raise_for_status is used effectively
+                flash(f'Received unexpected status: {response.status_code}', 'warning')
+                
+        except requests.exceptions.HTTPError as e:
+             # Handle specific errors like conflicts (409)
+             if e.response.status_code == 409: 
+                 error_details = e.response.json().get('message', '')
+                 if 'username' in error_details:
+                     flash(f'Error: Username "{username}" already exists.', 'danger')
+                 elif 'teacher_email' in error_details:
+                     flash(f'Error: Email "{teacher_email}" already exists.', 'danger')
+                 else:
+                     # Generic conflict message if details are unclear
+                     flash(f'Error: Username or Email already exists.', 'danger')
+             else:
+                 # Handle other HTTP errors (like 400 Bad Request, 500 Server Error)
+                 error_details = e.response.json().get('message', 'Unknown HTTP error')
+                 flash(f'Error adding teacher: {error_details}', 'danger')
+                 print(f"Supabase add teacher HTTP error: {e.response.text}")
+        except requests.exceptions.RequestException as e:
+            # Handle network errors (connection timeout, DNS issues etc.)
+            print(f"Error inserting teacher (Network/Request): {e}")
+            flash("Adding teacher failed due to a network or server connection error.", "danger")
+        except ValueError as e:
+            # Handle errors from get_supabase_rest_url (invalid table)
+            flash(str(e), "danger") 
+        except Exception as e:
+            # Catch any other unexpected errors during the process
+            print(f"Unexpected error adding teacher: {e}")
+            flash("An unexpected error occurred while adding the teacher.", "danger")
+
+    return redirect(url_for('manage_teachers_page'))
+
+
+@app.route('/admin/teachers/delete/<int:teacher_id>', methods=['POST'])
+@login_required(role='admin')
+def delete_teacher(teacher_id):
+    """Handles the POST request to delete a teacher."""
+    if request.method == 'POST':
+        try:
+            url = get_supabase_rest_url(TEACHER_TABLE)
+            params = {'teacher_id': f'eq.{teacher_id}'} # Use teacher_id
+            
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+
+            response = requests.delete(url, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            
+            # Check if deletion actually happened (optional, Supabase might not return count)
+            # You might need to adjust based on actual Supabase behavior or just assume success on 2xx
+            flash(f'Teacher deleted successfully.', 'success')
+
+        except requests.exceptions.HTTPError as e:
+             # Handle cases where the teacher might not exist (404) or other errors
+             error_details = e.response.json().get('message', 'Could not delete teacher')
+             flash(f'Error deleting teacher: {error_details}', 'danger')
+             print(f"Supabase delete teacher HTTP error: {e.response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error deleting teacher (Network/Request): {e}")
+            flash("Deleting teacher failed due to a network or server error.", "danger")
+        except ValueError as e:
+            flash(str(e), "danger")
+        except Exception as e:
+            print(f"Unexpected error deleting teacher: {e}")
+            flash("An unexpected error occurred while deleting the teacher.", "danger")
+
+    return redirect(url_for('manage_teachers_page'))
+
+
+@app.route('/admin/teachers/edit/<int:teacher_id>')
+@login_required(role='admin')
+def edit_teacher_page(teacher_id):
+    """Shows the form to edit a specific teacher."""
+    teacher = None
+    try:
+        url = get_supabase_rest_url(TEACHER_TABLE)
+        # Select specific fields excluding password
+        params = {'select': 'teacher_id,username,teacher_name,department,teacher_email', 'teacher_id': f'eq.{teacher_id}'}
+        
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if data and len(data) == 1:
+            teacher = data[0]
+            return render_template("edit_teacher.html", teacher=teacher)
+        else:
+            flash(f"Teacher with ID '{teacher_id}' not found.", 'danger')
+            return redirect(url_for('manage_teachers_page'))
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching teacher {teacher_id}: {e}")
+        flash("Could not load teacher data for editing.", "danger")
+        return redirect(url_for('manage_teachers_page'))
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for('manage_teachers_page'))
+
+
+@app.route('/admin/teachers/update', methods=['POST'])
+@login_required(role='admin')
+def update_teacher():
+    """Handles the form submission for updating an existing teacher."""
+    if request.method == 'POST':
+        teacher_id = request.form.get('teacher_id')
+        teacher_name = request.form.get('teacher_name', "").strip()
+        department = request.form.get('department', "").strip()
+        teacher_email = request.form.get('teacher_email', "").strip().lower()
+        # Password field removed from form data retrieval
+
+        if not all([teacher_id, teacher_name, teacher_email]):
+            flash('Name and Email are required.', 'danger')
+            # Redirect back to the edit page for the specific teacher
+            return redirect(url_for('edit_teacher_page', teacher_id=teacher_id))
+
+        # Data to update, excluding password
+        update_data = {
+            "teacher_name": teacher_name,
+            "department": department if department else None,
+            "teacher_email": teacher_email
+        }
+
+        # Removed the logic block that checked for and hashed a new password
+
+        try:
+            url = get_supabase_rest_url(TEACHER_TABLE)
+            params = {'teacher_id': f'eq.{teacher_id}'}
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+
+            response = requests.patch(url, headers=headers, params=params, json=update_data, timeout=10)
+            response.raise_for_status()
+
+            flash(f'Teacher "{teacher_name}" updated successfully!', 'success')
+            # Redirect to the main teacher list page after successful update
+            return redirect(url_for('manage_teachers_page'))
+
+        except requests.exceptions.HTTPError as e:
+             if e.response.status_code == 409: # conflict checking for email uniqueness
+                 flash(f'Error: Email "{teacher_email}" is already in use by another teacher.', 'danger')
+             else:
+                 error_details = e.response.json().get('message', 'Unknown error')
+                 flash(f'Error updating teacher: {error_details}', 'danger')
+                 print(f"Supabase update teacher HTTP error: {e.response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error updating teacher (Network/Request): {e}")
+            flash("Updating teacher failed due to a network or server connection error.", 'danger')
+        except ValueError as e: # Catches potential errors from get_supabase_rest_url
+            flash(str(e), "danger")
+        except Exception as e:
+            print(f"Unexpected error updating teacher: {e}")
+            flash("An unexpected error occurred while updating the teacher.", 'danger')
+
+        # If any error occurs, redirect back to the edit page for the same teacher
+        return redirect(url_for('edit_teacher_page', teacher_id=teacher_id))
+
+    # If not POST, redirect to the main teacher list (though typically accessed via GET on edit_teacher_page)
+    return redirect(url_for('manage_teachers_page'))
+# --- END: TEACHER MANAGEMENT ROUTES ---
+
 @app.route("/admin/events")
 @login_required(role='admin')
 def manage_events_page():
@@ -906,4 +1145,5 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
 
