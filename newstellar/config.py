@@ -24,6 +24,7 @@ ATTENDANCE_TABLES = ["attendance1", "attendance2", "attendance3", "attendance4"]
 ATTENDANCE_TABLE = "attendance" # General/old table, keep for reference or other uses
 EVENTS_TABLE = "events"
 HOLIDAYS_TABLE = "holidays"
+TIMETABLE_TABLE = "timetables"
 
 # --- Headers for Supabase REST API calls ---
 # Using Anon key - ensure RLS is properly configured if using this.

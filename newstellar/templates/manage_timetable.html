@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+
+{% block title %}Manage Timetable{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        /* Re-using styles from manage_courses.html */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-end: #0087c5;
+            --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .content-card {
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow-base);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .content-card h2 {
+            color: var(--accent-end);
+            margin-top: 0;
+            border-bottom: 2px solid var(--primary-bg);
+            padding-bottom: 0.5rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+        }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--subtle-text);
+        }
+        .form-group input,
+        .form-group select {
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        .btn-submit { background-color: var(--accent-end); }
+        .btn-submit:hover { background-color: #0070a9; }
+        
+        /* Timetable display */
+        .timetable-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+        .day-column {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .day-column h3 {
+            text-align: center;
+            color: var(--text-color);
+            border-bottom: 2px solid #dde8f0;
+            padding-bottom: 0.5rem;
+        }
+        .entry {
+            background: var(--secondary-bg);
+            padding: 0.75rem;
+            border-radius: 5px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .entry-details { line-height: 1.4; }
+        .entry-time { font-weight: 700; color: var(--text-color); }
+        .entry-subject { font-weight: 600; color: var(--accent-end); }
+        .entry-venue { color: var(--subtle-text); }
+        
+        .btn-delete-entry {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .btn-delete-entry:hover { background: #c82333; }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="content-card">
+    <h2>Select Semester</h2>
+    <form action="{{ url_for('manage_timetable_page') }}" method="GET">
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="semester">Semester</label>
+                <select id="semester" name="semester" onchange="this.form.submit()">
+                    <option value="">— Select —</option>
+                    {% for i in range(1, 9) %}
+                        <option value="{{ i }}" {% if i == selected_semester %}selected{% endif %}>
+                            Semester {{ i }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if selected_semester %}
+<div class="content-card">
+    <h2>Add Entry for Semester {{ selected_semester }}</h2>
+    <form action="{{ url_for('add_timetable_entry') }}" method="POST">
+        <input type="hidden" name="semester" value="{{ selected_semester }}">
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="day_of_week">Day</label>
+                <select id="day_of_week" name="day_of_week" required>
+                    <option value="MON">Monday</option>
+                    <option value="TUE">Tuesday</option>
+                    <option value="WED">Wednesday</option>
+                    <option value="THU">Thursday</option>
+                    <option value="FRI">Friday</option>
+                    <option value="SAT">Saturday</option>
+                    <option value="SUN">Sunday</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="start_time">Start Time</label>
+                <input type="time" id="start_time" name="start_time" required>
+            </div>
+            <div class="form-group">
+                <label for="end_time">End Time</label>
+                <input type="time" id="end_time" name="end_time" required>
+            </div>
+            <div class="form-group">
+                <label for="subject_code">Subject</label>
+                <select id="subject_code" name="subject_code">
+                    <option value="">— None (e.g., Break) —</option>
+                    {% for course in all_courses %}
+                        {% if course.semester == selected_semester %}
+                        <option value="{{ course.course_code }}">
+                            {{ course.course_name }} ({{ course.course_code }})
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="venue">Venue</label>
+                <input type="text" id="venue" name="venue" placeholder="e.g., Shed III">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-submit" style="margin-top: 1.5rem;">Add Timetable Entry</button>
+    </form>
+</div>
+
+<div class="content-card">
+    <h2>Current Timetable (Semester {{ selected_semester }})</h2>
+    <div class="timetable-display">
+        {% for day in ['MON', 'TUE', 'WED', 'THU', 'FRI'] %}
+        <div class="day-column">
+            <h3>{{ {'MON':'Monday', 'TUE':'Tuesday', 'WED':'Wednesday', 'THU':'Thursday', 'FRI':'Friday'}[day] }}</h3>
+            {% set entries_for_day = timetable_entries.get(day, []) %}
+            {% if entries_for_day %}
+                {% for entry in entries_for_day %}
+                <div class="entry">
+                    <div class="entry-details">
+                        <div class="entry-time">{{ entry.start_time }} - {{ entry.end_time }}</div>
+                        <div class="entry-subject">{{ entry.courses.course_name if entry.courses else entry.subject_code or 'Free Period' }}</div>
+                        <div class="entry-venue">{{ entry.venue or 'N/A' }}</div>
+                    </div>
+                    <form action="{{ url_for('delete_timetable_entry', entry_id=entry.id) }}" method="POST" onsubmit="return confirm('Delete this entry?');">
+                        <input type="hidden" name="semester" value="{{ selected_semester }}">
+                        <button type="submit" class="btn-delete-entry" title="Delete Entry">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="text-align: center; color: var(--subtle-text); font-size: 0.9rem;">No entries.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

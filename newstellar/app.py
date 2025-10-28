@@ -3,6 +3,7 @@
 import requests
 import json
 import datetime # Import datetime
+from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -11,7 +12,7 @@ from functools import wraps
 from config import (
     SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
     MARKS_TABLES, SECRET_KEY, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE
+    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE,TIMETABLE_TABLE
 )
 
 # Initialize Flask App
@@ -25,7 +26,7 @@ def get_supabase_rest_url(table_name):
     # Basic validation to prevent unintended table access
     allowed_tables = STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
         TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-        COURSE_TABLE # Added COURSE_TABLE
+        COURSE_TABLE, TIMETABLE_TABLE # Added COURSE_TABLE
     ] # Add other valid tables
     if table_name not in allowed_tables:
          raise ValueError(f"Access to table '{table_name}' is not permitted.")
@@ -98,6 +99,29 @@ def fetch_all_teachers():
         flash("Could not load teacher list for dropdowns.", "warning")
         return [] # Return empty list on error
 # --- END OF NEW HELPER FUNCTION ---
+
+# --- START NEW HELPER ---
+def get_current_semester(student_batch, current_month):
+    """Determines the student's current semester based on batch and month."""
+    
+    # Logic: b25 -> Year 1 (b1), b24 -> Year 2 (b2), etc.
+    year_map = {
+        'b1': 1,  # Corresponds to b25
+        'b2': 2,  # Corresponds to b24
+        'b3': 3,  # Corresponds to b23
+        'b4': 4   # Corresponds to b22
+    }
+    student_year = year_map.get(student_batch)
+    if not student_year:
+        return None
+
+    # Assuming July-December is ODD semester, Jan-June is EVEN semester
+    # Adjust this logic if your academic calendar is different
+    if 7 <= current_month <= 12: # July to Dec -> Odd Sem
+        return student_year * 2 - 1 # Year 1 -> Sem 1, Year 2 -> Sem 3
+    else: # Jan to June -> Even Sem
+        return student_year * 2 # Year 1 -> Sem 2, Year 2 -> Sem 4
+# --- END NEW HELPER ---
 
 # --- Context Processor ---
 @app.context_processor
@@ -191,58 +215,6 @@ def fetch_and_verify_user(username, password):
 
 # Hardcoded Timetable (as from your JS)
 # This should ideally be moved to the database
-b24_timetable = { # This is 'b2'
-    "MON": [
-        "09:30 - 10:30 → Digital Logic Design (ECE Faculty) Shed III",
-        "10:30 - 11:30 → Computational Mathematics (RS) Shed III",
-        "11:30 - 12:30 → Data Structure and Algorithms (LA) Shed III",
-        "12:30 - 14:00 → BREAK",
-        "14:00 - 16:00 → DLD Lab 'Aw' (ECE Faculty)",
-        "16:00 - 18:00 → DSA Lab (LA/AKT/BBS) CL-4",
-    ],
-    "TUE": [
-        "09:30 - 10:30 → Computer Networks (ALM) Shed III",
-        "10:30 - 11:30 → Data Structure and Algorithms (LA) Shed III",
-        "11:30 - 13:30 → DSA Lab (LA/AKT/BBS) CL-4",
-        "13:30 - 15:00 → BREAK",
-        "15:00 - 16:00 → Digital Logic Design (ECE Faculty) Shed III",
-        "16:00 - 18:00 → DLD Lab 'Ax' (ECE Faculty)",
-    ],
-    "WED": [
-        "09:30 - 10:30 → Computer Networks (ALM) Shed III",
-        "10:30 - 11:30 → Foundation to Machine Learning (BBS) Shed III",
-        "11:30 - 12:30 → Computational Mathematics (RS) Shed III",
-        "12:30 - 14:00 → Break",
-        "14:00 - 15:00 → Object Oriented System Design(PKK) Shed III",
-        "15:00 - 16:00 → Digital Logic Design (ECE Faculty) Shed III",
-        "16:00 - 18:00 → DLD Lab 'Ay' (ECE Faculty)",
-    ],
-    "THU": [
-        "08:30 - 09:30 → Professional Practice (BBS) Shed III",
-        "09:30 - 10:30 → Computational Mathematics (RS) Shed III",
-        "10:30 - 11:30 → Computer Networks (ALM) Shed III",
-        "11:30 - 13:30 → Computer Networks Lab (ALM) CL-4",
-        "13:30 - 15:00 → BREAK",
-        "15:00 - 16:00 → Object Oriented System Design (PKK) Shed III",
-        "16:00 - 18:00 → DLD Lab 'Az' (ECE Faculty)",
-    ],
-    "FRI": [
-        "08:30 - 09:30 → Professional Practice (BBS) Shed III",
-        "09:30 - 10:30 → Computer Networks (ALM) Shed III",
-        "10:30 - 12:30 → Foundation to Machine Learning (BBS) Shed III",
-        "12:30 - 14:00 → BREAK",
-        "14:00 - 15:00 → Object Oriented System Design (PKK) Shed III",
-        "15:00 - 16:00 → Data Structure and Algorithms (LA) Shed III",
-        "16:00 - 18:00 → OOSD Lab (PKK) CL-3",
-    ],
-}
-# Add other timetables if necessary
-timetables = {
-    'b2': b24_timetable # Assuming b24 roll_no maps to 'b2' table
-    # 'b1': b25_timetable, 
-    # 'b3': b23_timetable,
-    # 'b4': b22_timetable,
-}
 
 
 @app.route("/")
@@ -256,10 +228,11 @@ def index():
     today_is_holiday = False
     
     # Get today's date info (assuming server is in same timezone as users or UTC)
-    # Using UTC for consistency
-    today = datetime.datetime.utcnow() 
+    IST = ZoneInfo("Asia/Kolkata")
+    today = datetime.datetime.now(IST) 
     today_str = today.strftime('%a').upper() # MON, TUE...
     today_date_str = today.strftime('%Y-%m-%d') # 2025-10-25
+    current_month = today.month
 
     # Fetch Events
     try:
@@ -290,16 +263,50 @@ def index():
 
     # Get Student Schedule (if user is student)
     if user.get('role') == 'student':
-        if today_str in ["SAT", "SUN"]:
-            today_is_holiday = True
-        
+        if today_str in ["SAT", "SUN"] and not today_is_holiday:
+            # We'll let the DB query handle if there are Sat/Sun classes
+            pass 
+
         if not today_is_holiday:
             student_batch = user.get('batch') # e.g., 'b2'
-            if student_batch and student_batch in timetables:
-                daily_schedule = timetables[student_batch].get(today_str, [])
+            # Use the new helper function
+            current_semester = get_current_semester(student_batch, current_month)
+            
+            if current_semester:
+                try:
+                    url_tt = get_supabase_rest_url(TIMETABLE_TABLE)
+                    # Use Supabase join to fetch course name/code from 'courses' table
+                    params_tt = {
+                        'select': 'start_time,end_time,venue,subject_code,courses(course_name,course_code)',
+                        'semester': f'eq.{current_semester}',
+                        'day_of_week': f'eq.{today_str}',
+                        'order': 'start_time.asc'
+                    }
+                    response_tt = requests.get(url_tt, headers=SUPABASE_HEADERS, params=params_tt, timeout=5)
+                    response_tt.raise_for_status()
+                    
+                    fetched_entries = response_tt.json()
+                    
+                    # Format the fetched data for the dashboard
+                    for entry in fetched_entries:
+                        course_details = "Free Period" # Default
+                        if entry.get('courses'): # 'courses' will be non-null if subject_code matched
+                            course_name = entry['courses']['course_name']
+                            course_code = entry['courses']['course_code']
+                            course_details = f"{course_name} ({course_code})"
+                        elif entry.get('subject_code'): # Fallback if join fails but code exists
+                             course_details = entry.get('subject_code')
+
+                        venue = entry.get('venue') or 'N/A'
+                        schedule_str = f"{entry['start_time']} - {entry['end_time']} → {course_details} ({venue})"
+                        daily_schedule.append(schedule_str)
+                
+                except Exception as e:
+                    print(f"Error fetching timetable from DB: {e}")
+                    flash("Could not load today's schedule.", "warning")
+            
             else:
-                # No schedule found for this batch
-                daily_schedule = [] # Template will handle this
+                print(f"Could not determine current semester for batch {student_batch}")
     
     return render_template(
         "dashboard.html", 
@@ -1123,6 +1130,117 @@ def update_teacher():
     # If not POST, redirect to the main teacher list (though typically accessed via GET on edit_teacher_page)
     return redirect(url_for('manage_teachers_page'))
 # --- END: TEACHER MANAGEMENT ROUTES ---
+
+
+@app.route("/admin/timetable", methods=['GET'])
+@login_required(role='admin')
+def manage_timetable_page():
+    """Renders the main timetable management page."""
+    selected_semester = request.args.get('semester', type=int)
+    all_courses = []
+    timetable_entries = {} # Will be grouped by day
+
+    try:
+        # Fetch all courses to populate the "Add Entry" dropdown
+        url_courses = get_supabase_rest_url(COURSE_TABLE)
+        params_courses = {'select': 'course_code,course_name,semester', 'order': 'semester.asc,course_name.asc'}
+        response_courses = requests.get(url_courses, headers=SUPABASE_HEADERS, params=params_courses, timeout=10)
+        response_courses.raise_for_status()
+        all_courses = response_courses.json()
+
+        if selected_semester:
+            # If a semester is selected, fetch its existing timetable
+            url_tt = get_supabase_rest_url(TIMETABLE_TABLE)
+            # Join with courses table to get subject names
+            params_tt = {
+                'select': 'id,day_of_week,start_time,end_time,subject_code,venue,courses(course_name)',
+                'semester': f'eq.{selected_semester}',
+                'order': 'day_of_week.asc,start_time.asc'
+            }
+            response_tt = requests.get(url_tt, headers=SUPABASE_HEADERS, params=params_tt, timeout=10)
+            response_tt.raise_for_status()
+            
+            # Group the flat list of entries into a dictionary by day
+            for entry in response_tt.json():
+                day = entry['day_of_week']
+                if day not in timetable_entries:
+                    timetable_entries[day] = []
+                timetable_entries[day].append(entry)
+
+    except Exception as e:
+        print(f"Error loading timetable page: {e}")
+        flash(f"Error loading data: {e}", "danger")
+
+    return render_template(
+        "manage_timetable.html",
+        selected_semester=selected_semester,
+        all_courses=all_courses,
+        timetable_entries=timetable_entries
+    )
+
+
+@app.route("/admin/timetable/add", methods=['POST'])
+@login_required(role='admin')
+def add_timetable_entry():
+    """Handles adding a new timetable entry."""
+    semester = request.form.get('semester') # Get semester for redirect
+    try:
+        day = request.form.get('day_of_week')
+        start_time = request.form.get('start_time')
+        end_time = request.form.get('end_time')
+        subject_code = request.form.get('subject_code') or None # Use None if empty
+        venue = request.form.get('venue') or None
+
+        if not all([semester, day, start_time, end_time]):
+            flash("Semester, Day, Start Time, and End Time are required.", "danger")
+            return redirect(url_for('manage_timetable_page', semester=semester))
+
+        new_entry = {
+            "semester": int(semester),
+            "day_of_week": day,
+            "start_time": start_time,
+            "end_time": end_time,
+            "subject_code": subject_code,
+            "venue": venue
+        }
+        
+        url = get_supabase_rest_url(TIMETABLE_TABLE)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal' # We don't need the data back
+        
+        response = requests.post(url, headers=headers, json=new_entry, timeout=10)
+        response.raise_for_status() # Will error on failure
+        
+        flash("Timetable entry added successfully!", "success")
+
+    except Exception as e:
+        print(f"Error adding timetable entry: {e}")
+        flash(f"Error adding entry: {e}", "danger")
+    
+    return redirect(url_for('manage_timetable_page', semester=semester))
+
+
+@app.route("/admin/timetable/delete/<int:entry_id>", methods=['POST'])
+@login_required(role='admin')
+def delete_timetable_entry(entry_id):
+    """Handles deleting a timetable entry by its ID."""
+    semester = request.form.get('semester') # Get semester from hidden form for redirect
+    try:
+        url = get_supabase_rest_url(TIMETABLE_TABLE)
+        params = {'id': f'eq.{entry_id}'} # Delete where id matches
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal'
+        
+        response = requests.delete(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        flash("Entry deleted successfully.", "success")
+    
+    except Exception as e:
+        print(f"Error deleting entry: {e}")
+        flash(f"Error deleting entry: {e}", "danger")
+
+    return redirect(url_for('manage_timetable_page', semester=semester))
 
 @app.route("/admin/events")
 @login_required(role='admin')
