@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}StellarMind Prod{% endblock %}</title>
-    <!-- Add FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <!-- Base Styles -->
     <style>
         /* Base styles adapted from static/style.css */
         body {
@@ -100,20 +98,23 @@
              .nav-links { gap: 0.5rem; }
          }
     </style>
-    <!-- Allow child templates to add specific styles -->
     {% block head %}{% endblock %}
 </head>
 <body>
     <nav class="navbar">
         <div class="logo-container">
-            <!-- Update path if your logo is elsewhere -->
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo-img" onerror="this.onerror=null; this.src='https://placehold.co/40x40/0d6efd/ffffff?text=SM';">
             <span class="logo-name">StellarMind Prod</span>
         </div>
         <ul class="nav-links"> {# Changed div to ul for semantic correctness #}
             {% if session.user %}
                 <li><span class="user-greeting">Hello, {{ (session.user.get('student_name') or session.user.get('teacher_name') or session.user.username)|truncate(20) }}!</span></li>
-                <li><a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                
+                {% if session.user.role == 'admin' %}
+                    <li><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                {% endif %}
                 <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             {% else %}
                 <li><a href="{{ url_for('login_page') }}"><i class="fas fa-sign-in-alt"></i> Login</a></li>
@@ -122,7 +123,6 @@
         </ul>
     </nav>
 
-    <!-- Flash messages container -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="flash-messages container"> {# Added container class for padding #}
@@ -134,18 +134,13 @@
     {% endwith %}
 
     <main class="container">
-        <!-- Main content block -->
         {% block content %}{% endblock %}
     </main>
 
     <footer class="footer">
-        <!-- Use the 'now' variable passed from Flask -->
         <p>&copy; {{ now.year }} StellarMind Prod - NIT Sikkim</p>
-        <!-- Add social links or other footer content if needed -->
-    </footer>
+        </footer>
 
-    <!-- Allow child templates to add specific scripts -->
     {% block scripts %}{% endblock %}
 </body>
 </html>
-
