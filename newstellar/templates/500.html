@@ -4,56 +4,303 @@
 
 {% block head %}
     {{ super() }}
-    <style>
-        .error-container {
-            text-align: center;
-            padding: 4rem 1rem;
-            margin-top: 2rem;
-            background-color: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+     <style>
+        /* Theme variables */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --warning-color: #ffc107; /* Specific for 500 */
         }
-         .error-container h1 {
-            font-size: clamp(3rem, 10vw, 5rem); /* Responsive font size */
-            color: #ffc107; /* Bootstrap warning */
-            margin: 0;
-            font-weight: 700;
-            line-height: 1;
+
+        /* Center the game container */
+        .game-container {
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             justify-content: center;
+             min-height: 85vh; /* Increased slightly */
+             padding: 1rem;
+             box-sizing: border-box;
         }
-         .error-container .error-text {
-             font-size: 1.5rem;
-             color: #212529;
-             margin: 0.5rem 0 1rem;
+
+
+        /* Tic-Tac-Toe Game Styles */
+        .tic-tac-toe { margin-top: 1rem; padding-top: 1rem; text-align: center; width: 100%; }
+        .tic-tac-toe h3 { font-size: 1.2rem; color: var(--subtle-text); margin-bottom: 1rem; font-weight: 500; }
+
+        /* Significantly Increased game board size - Adjusted Clamp */
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            /* Adjusted clamp: min 320px (larger base), scales up to 95% of viewport width/height, max 450px */
+            width: clamp(320px, 95vmin, 450px);
+            height: clamp(320px, 95vmin, 450px);
+            margin: 1.5rem auto;
+            border: 4px solid var(--text-color); /* Thicker border */
+            border-radius: 12px; /* More rounded */
+            overflow: hidden;
+            background-color: var(--card-bg);
+        }
+        /* Significantly Increased cell size and font size - Adjusted Clamp */
+        .cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+             /* Adjusted clamp: min 3.5rem, scales up more, max 6.5rem */
+            font-size: clamp(3.5rem, 30vmin, 6.5rem);
+            font-weight: bold;
+            cursor: pointer;
+            border: 3px solid var(--text-color); /* Thicker lines */
+            box-sizing: border-box;
+            transition: background-color 0.2s ease;
+            user-select: none;
+            color: var(--text-color);
+        }
+        .cell:nth-child(3n) { border-right: none; }
+        .cell:nth-child(-n+3) { border-top: none; }
+        .cell:nth-child(n+7) { border-bottom: none; }
+        .cell:nth-child(3n+1) { border-left: none; }
+
+        .cell:hover:not(.occupied) { background-color: #dbe8f3; }
+        .cell.occupied { cursor: not-allowed; }
+        .cell.x { color: var(--accent-end); }
+        .cell.o { color: var(--warning-color); }
+
+        .game-status { margin-top: 1rem; font-size: 1.2rem; /* Slightly larger status text */ font-weight: 500; color: var(--text-color); min-height: 1.5em; }
+
+        /* Container for buttons */
+        .game-controls {
+            margin-top: 2rem; /* More space above buttons */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Larger buttons */
+        .btn-restart, .btn-home-game {
+             display: flex; /* Use flex to center icon+text */
+             align-items: center;
+             justify-content: center;
+             padding: 12px 25px; /* Increased padding */
+             border: none;
+             border-radius: 8px; /* Slightly more rounded */
+             font-size: 1.1rem; /* Increased font size */
+             cursor: pointer;
+             transition: background-color 0.3s ease, transform 0.2s ease;
+             width: 240px; /* Increased width */
+             box-sizing: border-box;
+             text-decoration: none; /* Ensure link looks like button */
+             gap: 8px; /* Space between icon and text */
              font-weight: 500;
         }
-        .error-container p {
-            font-size: 1.1rem;
-            color: #6c757d;
-            margin: 0 0 2rem;
+        .btn-restart {
+             background-color: var(--subtle-text);
+             color: white;
         }
-         .error-container .btn-home {
-            display: inline-block;
-            padding: 12px 30px;
-            background-color: #0d6efd;
-            color: white;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-            font-size: 1rem;
+         .btn-restart:hover {
+             background-color: var(--text-color);
+             transform: translateY(-2px);
+         }
+
+        .btn-home-game {
+             background-color: var(--accent-start);
+             color: white;
         }
-        .error-container .btn-home:hover {
-            background-color: #0b5ed7;
+        .btn-home-game:hover {
+            background-color: var(--accent-end);
             transform: translateY(-2px);
         }
+
+
     </style>
 {% endblock %}
 
 {% block content %}
-<div class="error-container">
-    <h1>500</h1>
-     <p class="error-text">Internal Server Error</p>
-    <p>Sorry, something went wrong on our end. Please try again later or contact support.</p>
-    <a href="{{ url_for('index') }}" class="btn-home"><i class="fas fa-home"></i> Go Back Home</a>
+<div class="game-container"> <!-- Added container to center game -->
+     <!-- Tic Tac Toe Game -->
+    <div class="tic-tac-toe">
+        <h3>Uh oh! Something went wrong. How about a quick game while we fix things?</h3>
+        <div id="game-board" class="game-board">
+            <!-- Added &nbsp; to prevent alignment shift -->
+            <div class="cell" data-index="0">&nbsp;</div>
+            <div class="cell" data-index="1">&nbsp;</div>
+            <div class="cell" data-index="2">&nbsp;</div>
+            <div class="cell" data-index="3">&nbsp;</div>
+            <div class="cell" data-index="4">&nbsp;</div>
+            <div class="cell" data-index="5">&nbsp;</div>
+            <div class="cell" data-index="6">&nbsp;</div>
+            <div class="cell" data-index="7">&nbsp;</div>
+            <div class="cell" data-index="8">&nbsp;</div>
+        </div>
+        <div id="game-status" class="game-status">Your turn (X)</div>
+        <!-- Group buttons together -->
+        <div class="game-controls">
+            <button id="restart-button" class="btn-restart"><i class="fas fa-redo"></i> Restart Game</button>
+            <!-- Added Back to Home button -->
+            <a href="{{ url_for('index') }}" class="btn-home-game"><i class="fas fa-home"></i> Back to Homepage</a>
+        </div>
+    </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <!-- Tic Tac Toe Game Logic with AI (No changes needed) -->
+    <script>
+        const boardElement = document.getElementById('game-board');
+        const statusElement = document.getElementById('game-status');
+        const restartButton = document.getElementById('restart-button');
+        const cells = document.querySelectorAll('.cell');
+
+        const player = 'X';
+        const computer = 'O';
+        let currentPlayer = player; // Player starts
+        let boardState = Array(9).fill(null);
+        let gameActive = true;
+
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+            [0, 4, 8], [2, 4, 6]             // Diagonals
+        ];
+
+        function handleCellClick(event) {
+            if (currentPlayer !== player || !gameActive) return; // Only player can click
+
+            const clickedCell = event.target;
+            const cellIndex = parseInt(clickedCell.getAttribute('data-index'));
+
+            if (boardState[cellIndex] !== null) {
+                return; // Cell already occupied
+            }
+
+            makeMove(cellIndex, player);
+
+            if (gameActive) {
+                currentPlayer = computer;
+                statusElement.textContent = `Computer's turn (${computer})...`;
+                 setTimeout(computerMove, 500);
+            }
+        }
+
+        function makeMove(index, symbol) {
+             if (boardState[index] !== null || !gameActive) return false; // Invalid move
+
+             boardState[index] = symbol;
+             cells[index].textContent = symbol; // This replaces &nbsp;
+             cells[index].classList.add('occupied', symbol.toLowerCase());
+
+             if (checkWinner(symbol)) {
+                 statusElement.textContent = `${symbol === player ? 'You Win!' : 'Computer Wins!'} 🎉`;
+                 gameActive = false;
+                 return true;
+             }
+
+             if (boardState.every(cell => cell !== null)) {
+                 statusElement.textContent = "It's a Draw! 🤝";
+                 gameActive = false;
+                 return true;
+             }
+             return true; // Move successful
+        }
+
+
+        function computerMove() {
+             if (!gameActive) return;
+
+            let moveIndex = findBestMove();
+
+            if (moveIndex !== -1) {
+                makeMove(moveIndex, computer);
+            }
+
+             if(gameActive) {
+                 currentPlayer = player;
+                 statusElement.textContent = `Your turn (${player})`;
+             }
+        }
+
+        function findBestMove() {
+            // ... (AI logic remains the same) ...
+            // 1. Check if Computer can win
+            for (let i = 0; i < boardState.length; i++) {
+                if (boardState[i] === null) {
+                    boardState[i] = computer; // Try move
+                    if (checkWinner(computer)) {
+                        boardState[i] = null; // Undo move
+                        return i; // Winning move found
+                    }
+                    boardState[i] = null; // Undo move
+                }
+            }
+            // 2. Check if Player can win and block
+            for (let i = 0; i < boardState.length; i++) {
+                if (boardState[i] === null) {
+                    boardState[i] = player; // Try move as player
+                    if (checkWinner(player)) {
+                        boardState[i] = null; // Undo move
+                        return i; // Blocking move found
+                    }
+                    boardState[i] = null; // Undo move
+                }
+            }
+             // 3. Prioritize center if available
+             if (boardState[4] === null) {
+                 return 4;
+             }
+             // 4. Prioritize corners if available
+             const corners = [0, 2, 6, 8];
+             const availableCorners = corners.filter(index => boardState[index] === null);
+             if (availableCorners.length > 0) {
+                 return availableCorners[Math.floor(Math.random() * availableCorners.length)];
+             }
+            // 5. Choose random available move
+            const availableCells = boardState
+                .map((cell, index) => (cell === null ? index : null))
+                .filter(index => index !== null);
+            if (availableCells.length > 0) {
+                return availableCells[Math.floor(Math.random() * availableCells.length)];
+            }
+            return -1; // Should not happen
+        }
+
+
+        function checkWinner(symbol) {
+            for (const combination of winningCombinations) {
+                const [a, b, c] = combination;
+                if (boardState[a] === symbol && boardState[b] === symbol && boardState[c] === symbol) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function restartGame() {
+            boardState.fill(null);
+            cells.forEach(cell => {
+                cell.innerHTML = '&nbsp;'; // Reset with &nbsp;
+                cell.classList.remove('occupied', 'x', 'o');
+            });
+            currentPlayer = player; // Player always starts
+            statusElement.textContent = `Your turn (${player})`;
+            gameActive = true;
+        }
+
+        // Add event listeners
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+        restartButton.addEventListener('click', restartGame);
+
+        // Initial setup message
+        statusElement.textContent = `Your turn (${player})`;
+
+    </script>
+{% endblock %}
+
