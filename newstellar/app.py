@@ -83,6 +83,22 @@ def determine_attendance_table(batch_table):
     if batch_table == 'b4': return 'attendance4'
     return None
 
+# --- START OF NEW HELPER FUNCTION ---
+def fetch_all_teachers():
+    """Fetches all teachers (username and name) from the database."""
+    try:
+        teacher_url = get_supabase_rest_url(TEACHER_TABLE)
+        # Select username and teacher_name, order by name
+        teacher_params = {'select': 'username,teacher_name', 'order': 'teacher_name.asc'}
+        response_teachers = requests.get(teacher_url, headers=SUPABASE_HEADERS, params=teacher_params, timeout=10)
+        response_teachers.raise_for_status()
+        return response_teachers.json() # Returns a list of teacher objects
+    except Exception as e:
+        print(f"Error fetching teachers: {e}")
+        flash("Could not load teacher list for dropdowns.", "warning")
+        return [] # Return empty list on error
+# --- END OF NEW HELPER FUNCTION ---
+
 # --- Context Processor ---
 @app.context_processor
 def inject_now():
@@ -649,6 +665,7 @@ def manage_users_page():
 def manage_courses_page():
     """Renders the course management page with a list of courses."""
     courses = []
+    all_teachers = fetch_all_teachers()
     
     # --- NEW: Search Logic ---
     search_params = {
@@ -689,7 +706,7 @@ def manage_courses_page():
         return redirect(url_for('admin_dashboard'))
         
     # Pass 'request.args' to the template to pre-fill search fields
-    return render_template("manage_courses.html", courses=courses, search_params=request.args)
+    return render_template("manage_courses.html", courses=courses, search_params=request.args,all_teachers=all_teachers)
 
 
 @app.route('/admin/courses/add', methods=['POST'])
@@ -785,6 +802,7 @@ def delete_course(course_code):
 def edit_course_page(course_code):
     """Shows the form to edit a specific course."""
     course = None
+    all_teachers = fetch_all_teachers()
     try:
         url = get_supabase_rest_url(COURSE_TABLE)
         # Select the specific course by its code
@@ -797,7 +815,7 @@ def edit_course_page(course_code):
         
         if data and len(data) == 1:
             course = data[0]
-            return render_template("edit_course.html", course=course)
+            return render_template("edit_course.html", course=course,all_teachers=all_teachers)
         else:
             flash(f"Course '{course_code}' not found.", 'danger')
             return redirect(url_for('manage_courses_page'))
@@ -888,3 +906,4 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
