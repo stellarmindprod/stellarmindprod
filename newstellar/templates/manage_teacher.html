@@ -68,7 +68,8 @@
             font-size: 1rem;
             font-family: inherit;
         }
-        .form-group input:focus {
+        .form-group input:focus,
+        .form-group select:focus { /* ADDED SELECT */
             border-color: var(--accent-end);
             outline: none;
             box-shadow: 0 0 5px rgba(0,135,197,0.3);
@@ -140,7 +141,6 @@
     <button id="toggle-search-btn" class="btn btn-secondary-new"><i class="fas fa-search"></i> Toggle Search</button>
 </div>
 
-<!-- Add Teacher Form (Password field removed) -->
 <div id="add-form-container" class="form-container" style="display: none;">
     <div class="content-card">
         <h2>Add New Teacher</h2>
@@ -161,31 +161,32 @@
                 <label for="teacher_email">Email</label>
                 <input type="email" id="teacher_email" name="teacher_email" placeholder="e.g., jsmith@nitsikkim.ac.in" required>
             </div>
-            <!-- Password field removed from here -->
             <button type="submit" class="btn btn-submit">Add Teacher</button>
         </form>
     </div>
 </div>
 
-<!-- Search Teachers Form -->
 <div id="search-form-container" class="form-container" style="display: none;">
     <div class="content-card">
         <h2>Search Teachers</h2>
         <form action="{{ url_for('manage_teachers_page') }}" method="GET" class="teacher-form">
             <div class="form-group">
                 <label for="search_username">Username</label>
-                <input type="text" id="search_username" name="search_username" placeholder="Contains..." value="{{ search_params.search_username or '' }}">
+                <select id="search_username" name="search_username">
+                    <option value="">— All Usernames —</option>
+                    </select>
             </div>
             <div class="form-group">
                 <label for="search_name">Full Name</label>
-                <input type="text" id="search_name" name="search_name" placeholder="Contains..." value="{{ search_params.search_name or '' }}">
+                <select id="search_name" name="search_name">
+                    <option value="">— All Names —</option>
+                    </select>
             </div>
             <button type="submit" class="btn btn-submit" style="background-color: #007bff;">Search</button>
         </form>
     </div>
 </div>
 
-<!-- Teacher List Table -->
 <div class="content-card">
     <h2>
         <span>{% if search_params %}Search Results{% else %}All Teachers{% endif %}</span>
@@ -234,8 +235,15 @@
 
 {% block scripts %}
     {{ super() }}
+
+    <div id="flask-data" style="display: none;"
+        data-all-teachers='{{ all_teachers_json | safe }}'
+        data-search-params='{{ search_params | tojson | safe }}'
+    ></div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // --- Original Toggle Logic ---
             const addBtn = document.getElementById('add-teacher-btn');
             const searchBtn = document.getElementById('toggle-search-btn');
             const addForm = document.getElementById('add-form-container');
@@ -259,16 +267,84 @@
                 }
             });
             
-            const urlParams = new URLSearchParams(window.location.search);
+            // --- NEW DYNAMIC DROPDOWN LOGIC ---
+            
+            // 1. Get Data from hidden div
+            const dataElement = document.getElementById('flask-data');
+            const ALL_TEACHERS = JSON.parse(dataElement.dataset.allTeachers);
+            const SEARCH_PARAMS = JSON.parse(dataElement.dataset.searchParams);
+            
+            // 2. Get Search Form Elements
+            const usernameSearch = document.getElementById('search_username');
+            const nameSearch = document.getElementById('search_name');
+            
+            let isUpdatingSelects = false; // Flag to prevent event loops
+
+            /**
+             * Populates a <select> dropdown with items.
+             * @param {HTMLSelectElement} selectEl - The dropdown element.
+             * @param {Array} items - Array of {value, text} objects.
+             * @param {string} defaultOptionText - Text for the first, empty-value option.
+             */
+            function populateDropdown(selectEl, items, defaultOptionText) {
+                const currentValue = selectEl.value;
+                selectEl.innerHTML = ''; // Clear
+                selectEl.appendChild(new Option(defaultOptionText, ''));
+                
+                items.forEach(item => {
+                    const option = new Option(item.text, item.value);
+                    selectEl.appendChild(option);
+                });
+                selectEl.value = currentValue; // Restore selection
+            }
+
+            // 3. Create items and populate
+            const usernameItems = ALL_TEACHERS.map(t => ({
+                text: t.username,
+                value: t.username
+            })).sort((a,b) => a.text.localeCompare(b.text)); // Sort alphabetically
+            
+            const nameItems = ALL_TEACHERS.map(t => ({
+                text: `${t.teacher_name} (${t.username})`,
+                value: t.username // Use username as the value
+            })).sort((a,b) => a.text.localeCompare(b.text)); // Sort alphabetically
+            
+            populateDropdown(usernameSearch, usernameItems, "— All Usernames —");
+            populateDropdown(nameSearch, nameItems, "— All Names —");
+
+            // 4. Add Event Listeners
+            usernameSearch.addEventListener('change', () => {
+                if (isUpdatingSelects) return;
+                isUpdatingSelects = true;
+                // Set the name dropdown's value (which is the username)
+                nameSearch.value = usernameSearch.value; 
+                isUpdatingSelects = false;
+            });
+
+            nameSearch.addEventListener('change', () => {
+                if (isUpdatingSelects) return;
+                isUpdatingSelects = true;
+                // Set the username dropdown's value
+                usernameSearch.value = nameSearch.value;
+                isUpdatingSelects = false;
+            });
+            
+            // 5. Set Initial State from URL Search Params
             let hasSearchValue = false;
+            // Both search fields submit a username, check both
+            const searchUser = SEARCH_PARAMS.search_username || SEARCH_PARAMS.search_name;
             
-            if (urlParams.has('search_username') && urlParams.get('search_username') !== '') hasSearchValue = true;
-            if (urlParams.has('search_name') && urlParams.get('search_name') !== '') hasSearchValue = true;
-            
+            if (searchUser) {
+                usernameSearch.value = searchUser;
+                nameSearch.value = searchUser;
+                hasSearchValue = true;
+            }
+
+            // Show search form if a search was performed
             if (hasSearchValue) {
                 searchForm.style.display = 'block';
+                addForm.style.display = 'none';
             }
         });
     </script>
 {% endblock %}
-
