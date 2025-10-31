@@ -837,43 +837,64 @@ def manage_users_page():
 
 # --- START: COURSE MANAGEMENT ROUTES ---
 
+# --- Find this route in app.py ---
+# @app.route("/admin/courses")
+# ...
+# def manage_courses_page():
+# ... (old code) ...
+
+# --- AND REPLACE IT WITH THIS ---
+
 @app.route("/admin/courses")
 @login_required(role='admin')
 def manage_courses_page():
     """Renders the course management page with a list of courses."""
-    courses = []
-    all_teachers = fetch_all_teachers()
     
-    # --- NEW: Search Logic ---
+    # --- This part fetches ALL data for the dropdowns ---
+    all_courses_data = []
+    all_teachers = fetch_all_teachers() # You already have this helper
+    
+    try:
+        # Fetch ALL courses to power the dynamic search dropdowns
+        url_all_courses = get_supabase_rest_url(COURSE_TABLE)
+        params_all = {'select': 'course_code,course_name,semester,assisting_teacher'}
+        response_all = requests.get(url_all_courses, headers=SUPABASE_HEADERS, params=params_all, timeout=10)
+        response_all.raise_for_status()
+        all_courses_data = response_all.json()
+
+    except Exception as e:
+        print(f"Error fetching all courses/teachers for dropdowns: {e}")
+        flash("Could not load data for search filters.", "warning")
+        # Continue anyway, the search might still work manually
+        
+    # --- This part (which was already here) fetches the FILTERED courses for the table ---
+    filtered_courses = []
     search_params = {
         'select': '*',
         'order': 'semester.asc,course_name.asc'
     }
-    # Get search terms from query string (e.g., /admin/courses?search_name=Intro)
     search_code = request.args.get('search_code', '').strip()
     search_name = request.args.get('search_name', '').strip()
     search_teacher = request.args.get('search_teacher', '').strip()
     search_semester = request.args.get('search_semester', '').strip()
 
     # Add filters to params if they exist
-    # 'ilike' is case-insensitive 'like' (partial match)
     if search_code:
-        search_params['course_code'] = f'ilike.%{search_code}%'
+        search_params['course_code'] = f'eq.{search_code}' # Use 'eq' for exact match from dropdown
     if search_name:
-        search_params['course_name'] = f'ilike.%{search_name}%'
+         # Name dropdown also uses code as value, so this filter might not be hit,
+         # but we keep it just in case. Or search by code.
+        search_params['course_code'] = f'eq.{search_name}' # Name dropdown value is code
     if search_teacher:
-        search_params['assisting_teacher'] = f'ilike.%{search_teacher}%'
+        search_params['assisting_teacher'] = f'eq.{search_teacher}' # 'eq' for exact match
     if search_semester:
-        search_params['semester'] = f'eq.{search_semester}' # 'eq' is exact match
+        search_params['semester'] = f'eq.{search_semester}' 
 
     try:
-        url = get_supabase_rest_url(COURSE_TABLE)
-        
-        # Use the built 'search_params' dictionary
-        response = requests.get(url, headers=SUPABASE_HEADERS, params=search_params, timeout=10)
-        response.raise_for_status() 
-        
-        courses = response.json()
+        url_filtered = get_supabase_rest_url(COURSE_TABLE)
+        response_filtered = requests.get(url_filtered, headers=SUPABASE_HEADERS, params=search_params, timeout=10)
+        response_filtered.raise_for_status() 
+        filtered_courses = response_filtered.json()
         
     except requests.exceptions.RequestException as e:
         print(f"Error fetching courses: {e}")
@@ -882,9 +903,17 @@ def manage_courses_page():
         flash(str(e), "danger")
         return redirect(url_for('admin_dashboard'))
         
-    # Pass 'request.args' to the template to pre-fill search fields
-    return render_template("manage_courses.html", courses=courses, search_params=request.args,all_teachers=all_teachers)
-
+    # Pass BOTH all_data (for JS) and filtered_courses (for table)
+    return render_template(
+        "manage_courses.html", 
+        courses=filtered_courses, # The filtered list to display
+        search_params=request.args,
+        all_teachers=all_teachers, # For the "Add Course" form
+        
+        # New data for the dynamic search dropdowns
+        all_courses_json=json.dumps(all_courses_data),
+        all_teachers_json=json.dumps(all_teachers)
+    )
 
 @app.route('/admin/courses/add', methods=['POST'])
 @login_required(role='admin')
@@ -1433,4 +1462,5 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
 
