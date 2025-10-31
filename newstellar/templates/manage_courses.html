@@ -71,7 +71,8 @@
             font-size: 1rem;
             font-family: inherit;
         }
-        .form-group input:focus {
+        .form-group input:focus,
+        .form-group select:focus { /* MODIFIED */
             border-color: var(--accent-end);
             outline: none;
             box-shadow: 0 0 5px rgba(0,135,197,0.3);
@@ -144,6 +145,7 @@
         <option value="{{ teacher.username }}">{{ teacher.teacher_name }}</option>
     {% endfor %}
 </datalist>
+
 <div class="page-controls">
     <button id="add-course-btn" class="btn btn-submit-new"><i class="fas fa-plus"></i> Add New Course</button>
     <button id="toggle-search-btn" class="btn btn-secondary-new"><i class="fas fa-search"></i> Toggle Search</button>
@@ -183,20 +185,36 @@
         <h2>Search Courses</h2>
         <form action="{{ url_for('manage_courses_page') }}" method="GET" class="course-form">
             <div class="form-group">
-                <label for="search_code">Course Code</label>
-                <input type="text" id="search_code" name="search_code" placeholder="Contains..." value="{{ search_params.search_code or '' }}">
-            </div>
-            <div class="form-group">
-                <label for="search_name">Course Name</label>
-                <input type="text" id="search_name" name="search_name" placeholder="Contains..." value="{{ search_params.search_name or '' }}">
+                <label for="search_semester">Semester</label>
+                <select id="search_semester" name="search_semester">
+                    <option value="">— All Semesters —</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                    <option value="3">Semester 3</option>
+                    <option value="4">Semester 4</option>
+                    <option value="5">Semester 5</option>
+                    <option value="6">Semester 6</option>
+                    <option value="7">Semester 7</option>
+                    <option value="8">Semester 8</option>
+                </select>
             </div>
             <div class="form-group">
                 <label for="search_teacher">Assisting Teacher</label>
-                <input type="text" id="search_teacher" name="search_teacher" placeholder="Type or select username..." value="{{ search_params.search_teacher or '' }}" list="teacher-list">
+                <select id="search_teacher" name="search_teacher">
+                    <option value="">— All Teachers —</option>
+                    </select>
             </div>
             <div class="form-group">
-                <label for="search_semester">Semester</label>
-                <input type="number" id="search_semester" name="search_semester" min="1" max="8" placeholder="Exact match..." value="{{ search_params.search_semester or '' }}">
+                <label for="search_code">Course Code</label>
+                <select id="search_code" name="search_code">
+                    <option value="">— All Codes —</option>
+                    </select>
+            </div>
+            <div class="form-group">
+                <label for="search_name">Course Name</label>
+                <select id="search_name" name="search_name">
+                    <option value="">— All Names —</option>
+                    </select>
             </div>
             <button type="submit" class="btn btn-submit" style="background-color: #007bff;">Search</button>
         </form>
@@ -253,8 +271,16 @@
 
 {% block scripts %}
     {{ super() }}
+    
+    <div id="flask-data" style="display: none;"
+        data-all-courses='{{ all_courses_json | safe }}'
+        data-all-teachers='{{ all_teachers_json | safe }}'
+        data-search-params='{{ search_params | tojson | safe }}'
+    ></div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // --- Original Toggle Logic ---
             const addBtn = document.getElementById('add-course-btn');
             const searchBtn = document.getElementById('toggle-search-btn');
             const addForm = document.getElementById('add-form-container');
@@ -278,19 +304,156 @@
                 }
             });
             
-            // Check if any search parameters are in the URL and have a value
-            const urlParams = new URLSearchParams(window.location.search);
+            // --- NEW DYNAMIC DROPDOWN LOGIC ---
+            
+            // 1. Get Data from hidden div
+            const dataElement = document.getElementById('flask-data');
+            const ALL_COURSES = JSON.parse(dataElement.dataset.allCourses);
+            const ALL_TEACHERS = JSON.parse(dataElement.dataset.allTeachers);
+            const SEARCH_PARAMS = JSON.parse(dataElement.dataset.searchParams);
+
+            // 2. Get Search Form Elements
+            const semesterSearch = document.getElementById('search_semester');
+            const teacherSearch = document.getElementById('search_teacher');
+            const codeSearch = document.getElementById('search_code');
+            const nameSearch = document.getElementById('search_name');
+            
+            let isUpdatingSelects = false; // Flag to prevent event loops
+
+            /**
+             * Populates a <select> dropdown with items.
+             * @param {HTMLSelectElement} selectEl - The dropdown element.
+             * @param {Array} items - Array of {value, text} objects.
+             * @param {string} defaultOptionText - Text for the first, empty-value option.
+             * @param {string} selectedValue - The value to pre-select.
+             */
+            function populateDropdown(selectEl, items, defaultOptionText, selectedValue) {
+                const currentValue = selectedValue || selectEl.value;
+                selectEl.innerHTML = ''; // Clear
+                
+                selectEl.appendChild(new Option(defaultOptionText, ''));
+                
+                items.forEach(item => {
+                    const option = new Option(item.text, item.value);
+                    selectEl.appendChild(option);
+                });
+                
+                selectEl.value = currentValue;
+                if (selectEl.value !== currentValue) {
+                    selectEl.value = ''; // Reset if old value is no longer valid
+                }
+            }
+
+            /**
+             * Main function to update all dropdowns based on current filters.
+             */
+            function updateSearchDropdowns(changedElement) {
+                if (isUpdatingSelects) return;
+                isUpdatingSelects = true;
+                
+                const sem = semesterSearch.value;
+                const teacher = teacherSearch.value;
+                const code = codeSearch.value;
+                
+                // If a code was just selected, find the single course
+                if (changedElement === codeSearch && code) {
+                    const course = ALL_COURSES.find(c => c.course_code === code);
+                    if (course) {
+                        // Auto-fill all other fields
+                        semesterSearch.value = course.semester;
+                        teacherSearch.value = course.assisting_teacher || '';
+                        nameSearch.value = course.course_code; // Name dropdown uses code as value
+                    }
+                } else if (changedElement === nameSearch && nameSearch.value) {
+                    // Name dropdown value is the code
+                    const course = ALL_COURSES.find(c => c.course_code === nameSearch.value);
+                    if (course) {
+                        // Auto-fill all other fields
+                        semesterSearch.value = course.semester;
+                        teacherSearch.value = course.assisting_teacher || '';
+                        codeSearch.value = course.course_code;
+                    }
+                }
+
+                // Filter ALL courses based on the current state of *all* dropdowns
+                let filteredCourses = ALL_COURSES;
+                if (semesterSearch.value) {
+                    filteredCourses = filteredCourses.filter(c => c.semester == semesterSearch.value);
+                }
+                if (teacherSearch.value) {
+                    filteredCourses = filteredCourses.filter(c => c.assisting_teacher == teacherSearch.value);
+                }
+                if (codeSearch.value) {
+                    filteredCourses = filteredCourses.filter(c => c.course_code == codeSearch.value);
+                }
+                
+                // Get unique teachers, codes, and names from the filtered courses
+                const teacherUsernames = [...new Set(filteredCourses.map(c => c.assisting_teacher))].filter(Boolean); // filter(Boolean) removes null/undefined
+                const teacherItems = ALL_TEACHERS
+                    .filter(t => teacherUsernames.includes(t.username))
+                    .map(t => ({ text: `${t.teacher_name} (${t.username})`, value: t.username }));
+
+                const codeItems = filteredCourses.map(c => ({
+                    text: c.course_code, value: c.course_code
+                }));
+                
+                const nameItems = filteredCourses.map(c => ({
+                    text: c.course_name, value: c.course_code
+                }));
+
+                // Re-populate dropdowns, preserving current selection
+                if (changedElement !== teacherSearch) {
+                    populateDropdown(teacherSearch, teacherItems, "— All Teachers —", teacherSearch.value);
+                }
+                if (changedElement !== codeSearch) {
+                    populateDropdown(codeSearch, codeItems, "— All Codes —", codeSearch.value);
+                }
+                if (changedElement !== nameSearch) {
+                    populateDropdown(nameSearch, nameItems, "— All Names —", nameSearch.value);
+                }
+                
+                isUpdatingSelects = false;
+            }
+
+            // 3. Add Event Listeners
+            semesterSearch.addEventListener('change', () => updateSearchDropdowns(semesterSearch));
+            teacherSearch.addEventListener('change', () => updateSearchDropdowns(teacherSearch));
+            codeSearch.addEventListener('change', () => updateSearchDropdowns(codeSearch));
+            nameSearch.addEventListener('change', () => updateSearchDropdowns(nameSearch));
+
+            // 4. Set Initial State from URL Search Params
             let hasSearchValue = false;
+            if (SEARCH_PARAMS.search_semester) {
+                semesterSearch.value = SEARCH_PARAMS.search_semester;
+                hasSearchValue = true;
+            }
+            if (SEARCH_PARAMS.search_teacher) {
+                teacherSearch.value = SEARCH_PARAMS.search_teacher; // Need to populate teachers first
+                hasSearchValue = true;
+            }
+            if (SEARCH_PARAMS.search_code) {
+                codeSearch.value = SEARCH_PARAMS.search_code;
+                hasSearchValue = true;
+            }
+            if (SEARCH_PARAMS.search_name) {
+                nameSearch.value = SEARCH_PARAMS.search_name; // This is the course code
+                hasSearchValue = true;
+            }
             
-            // This checks if any search key exists AND is not empty
-            if (urlParams.has('search_code') && urlParams.get('search_code') !== '') hasSearchValue = true;
-            if (urlParams.has('search_name') && urlParams.get('search_name') !== '') hasSearchValue = true;
-            if (urlParams.has('search_teacher') && urlParams.get('search_teacher') !== '') hasSearchValue = true;
-            if (urlParams.has('search_semester') && urlParams.get('search_semester') !== '') hasSearchValue = true;
+            // Populate all dropdowns based on initial filters
+            updateSearchDropdowns(null); 
             
-            // If a search was performed, show the search form on page load
+            // Now, re-apply the selections from search_params
+            // This ensures the dropdowns are correctly filtered AND selected.
+            if (SEARCH_PARAMS.search_semester) semesterSearch.value = SEARCH_PARAMS.search_semester;
+            if (SEARCH_PARAMS.search_teacher) teacherSearch.value = SEARCH_PARAMS.search_teacher;
+            if (SEARCH_PARAMS.search_code) codeSearch.value = SEARCH_PARAMS.search_code;
+            if (SEARCH_PARAMS.search_name) nameSearch.value = SEARCH_PARAMS.search_name;
+
+            // Show search form if a search was performed
             if (hasSearchValue) {
                 searchForm.style.display = 'block';
+                addForm.style.display = 'none';
             }
         });
     </script>
