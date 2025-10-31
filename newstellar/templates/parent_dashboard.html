@@ -177,6 +177,57 @@
       font-weight: 600;
     }
 
+    /* --- NEW: Subject List Styles (Copied from attendance.html) --- */
+    .subject-info-container {
+        /* background: var(--secondary-bg); */ /* Already in content-card */
+        /* border-radius: 1.5rem; */ /* Already in content-card */
+        /* padding: 1.5rem; */ /* Already in content-card */
+        margin-bottom: 2rem;
+        /* max-width: 1000px; */ /* Let content-card handle width */
+        margin-left: auto;
+        margin-right: auto;
+        /* box-shadow: 0 8px 30px var(--shadow-light); */ /* Already in content-card */
+        width: 100%; 
+        box-sizing: border-box;
+    }
+
+    .subject-info-container h3 {
+        margin-bottom: 1rem;
+        color: var(--text-color);
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    .subject-list {
+        list-style: none;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        padding-left: 0;
+        text-align: left;
+    }
+
+    .subject-list li {
+        background: var(--card-bg);
+        padding: 0.75rem 1rem;
+        border-radius: 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--subtle-text);
+        text-align: left;
+    }
+    
+    .subject-code {
+        font-weight: 700;
+        color: var(--text-color);
+    }
+    
+    .subject-percent {
+        font-weight: 700;
+        color: var(--accent-end);
+    }
+    /* --- END: Subject List Styles --- */
+
     /* Attendance Chart */
     .chart-container {
         height: 350px;
@@ -415,6 +466,11 @@
         min-width: 45%;
         padding-right: 1rem;
       }
+
+      /* NEW: Responsive Subject List */
+      .subject-list {
+          grid-template-columns: 1fr; /* Stack on mobile */
+      }
     }
   </style>
 {% endblock %}
@@ -446,6 +502,15 @@
             <section class="content-card" id="attendance-section">
                 <h2>Attendance Summary</h2>
                 <div id="attendance-loading" class="status-message">Loading attendance...</div>
+                
+                <!-- NEW: Subject List Container -->
+                <div class="subject-info-container" id="subjectInfoContainer" style="display: none;">
+                    <h3>Overall Attendance</h3>
+                    <ul class="subject-list" id="subjectList">
+                        <!-- Subject list will be dynamically populated here -->
+                    </ul>
+                </div>
+                
                 <div class="chart-container" id="attendance-chart-container" style="display: none;">
                     <canvas id="attendanceChart"></canvas>
                 </div>
@@ -508,7 +573,8 @@
     const COURSE_TABLE = "courses"; // Hardcoded course table name
 
     // --- Initialize Supabase client ---
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // FIX: Correctly initialize the Supabase client
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // --- DOM Elements ---
     const attendanceLoading = document.getElementById('attendance-loading');
@@ -517,6 +583,10 @@
     const marksLoading = document.getElementById('marks-loading');
     const marksTableContainer = document.getElementById('marks-table-container');
     
+    // --- NEW: Subject List Elements ---
+    const subjectInfoContainer = document.getElementById('subjectInfoContainer');
+    const subjectList = document.getElementById('subjectList');
+
     // --- NEW TOGGLE ELEMENTS ---
     const viewAttendanceBtn = document.getElementById('view-attendance-btn');
     const viewMarksBtn = document.getElementById('view-marks-btn');
@@ -551,15 +621,18 @@
         try {
             // --- 1. Fetch all data in parallel ---
             const [attendanceRes, marksRes, coursesRes] = await Promise.all([
-                supabase
+                // FIX: Use supabaseClient
+                supabaseClient
                     .from(ATTENDANCE_TABLE)
                     .select("subject_name, subject_code, status, total_classes")
                     .eq("roll_no", STUDENT_ROLL_NO),
-                supabase
+                // FIX: Use supabaseClient
+                supabaseClient
                     .from(MARKS_TABLE)
                     .select('subject_code, mid1, mid2, endsem, final_grade')
                     .eq('roll_no', STUDENT_ROLL_NO),
-                supabase
+                // FIX: Use supabaseClient
+                supabaseClient
                     .from(COURSE_TABLE)
                     .select('course_code, course_name')
             ]);
@@ -587,11 +660,38 @@
     }
 
     /**
+     * NEW: Renders the subject percentage list
+     * @param {Object} subjectData - Aggregated subject data
+     */
+    function renderSubjectList(subjectData) {
+        const subjects = Object.values(subjectData);
+        if (subjects.length === 0) {
+             subjectList.innerHTML = "<li>No subject data found.</li>";
+        } else {
+            subjectList.innerHTML = subjects.map(sub => {
+                const percentage = sub.total > 0 ? ((sub.attended / sub.total) * 100).toFixed(1) : 0;
+                // Determine color based on percentage
+                const percentClass = percentage >= 75 ? 'success' : 'danger';
+                // Apply color style directly for simplicity
+                const colorStyle = percentage >= 75 ? 'color: #27ae60;' : 'color: #e74c3c;';
+
+                return `<li>
+                            <span class="subject-code">${sub.code}</span>: ${sub.name} <br> 
+                            <span class="subject-percent" style="${colorStyle}">${percentage}%</span> 
+                            (${sub.attended}/${sub.total})
+                        </li>`;
+            }).join('');
+        }
+        subjectInfoContainer.style.display = 'block'; // Show the container
+    }
+
+    /**
      * Renders the attendance data into a bar chart
      * @param {Array} data - The raw attendance data from Supabase
      */
     function renderAttendance(data) {
         if (!data || data.length === 0) {
+            // FIX: This now correctly sets the message when no data is found
             attendanceLoading.innerHTML = "No attendance records found for this student.";
             return;
         }
@@ -611,6 +711,10 @@
             subjectData[subjectIdentifier].attended += record.status;
             subjectData[subjectIdentifier].total += record.total_classes;
         });
+
+        // --- NEW: Call renderSubjectList ---
+        renderSubjectList(subjectData);
+        // --- END NEW ---
 
         const subjects = Object.values(subjectData);
         const subjectCodes = subjects.map(sub => sub.code);
@@ -776,7 +880,8 @@
         
         try {
             // 1. Upload file to Storage
-            const { data: fileData, error: fileError } = await supabase.storage
+            // FIX: Use supabaseClient
+            const { data: fileData, error: fileError } = await supabaseClient.storage
                 .from('medical_certificates') // BUCKET NAME
                 .upload(filePath, selectedFile, {
                     cacheControl: '3600',
@@ -789,7 +894,8 @@
             
             // 2. Insert record into the database
             uploadStatus.textContent = "Saving submission...";
-            const { error: dbError } = await supabase
+            // FIX: Use supabaseClient
+            const { error: dbError } = await supabaseClient
                 .from('medical_submissions') // TABLE NAME
                 .insert({ 
                     student_roll_no: STUDENT_ROLL_NO,
