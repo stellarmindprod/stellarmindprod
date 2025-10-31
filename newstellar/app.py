@@ -767,11 +767,50 @@ def view_student_profiles_page():
      flash("Student profile view not yet implemented.", "info")
      return redirect(url_for('index'))
 
+# --- Find the old /admin/attendance route and REPLACE it with this ---
+
 @app.route("/admin/attendance")
 @login_required(role='admin')
 def admin_mark_attendance_page():
-     flash("Admin attendance management not yet implemented.", "info")
-     return redirect(url_for('index'))
+    """
+    Renders the admin attendance management page.
+    Fetches ALL courses and ALL teachers for the admin to select from.
+    """
+    user = session.get('user')
+    all_courses = []
+    all_teachers = [] # <-- Will hold all teacher data
+    
+    try:
+        # Fetch ALL courses from the 'courses' table
+        url = get_supabase_rest_url(COURSE_TABLE)
+        # Admin gets ALL courses, ordered by semester. We need assisting_teacher
+        params = {'select': 'course_code,course_name,semester,credits,assisting_teacher', 'order': 'semester.asc,course_name.asc'} 
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        all_courses = response.json()
+        
+        # Fetch all teachers
+        all_teachers = fetch_all_teachers() # <-- Call the helper function
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching all courses/teachers for admin: {e}")
+        flash("Error loading data.", "danger")
+    except ValueError as e:
+        # This catches get_supabase_rest_url error
+        print(f"Configuration error: {e}")
+        flash("Server configuration error trying to access courses.", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    # Render the new admin_attendance.html template
+    return render_template(
+        "admin_attendance.html", # <-- Render the new template
+        user=user,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY,
+        all_courses_json=json.dumps(all_courses), # <-- Pass all courses
+        all_teachers_json=json.dumps(all_teachers), # <-- Pass all teachers
+        attendance_tables_json=json.dumps(ATTENDANCE_TABLES) 
+    )
 
 @app.route("/admin/marks")
 @login_required(role='admin')
@@ -1394,3 +1433,4 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
