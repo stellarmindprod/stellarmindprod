@@ -286,3 +286,23 @@ CREATE TABLE timetables (
 
 -- Add an index for faster lookups by semester and day
 CREATE INDEX idx_timetable_semester_day ON timetables (semester, day_of_week);
+
+
+-- This script adds a 'parent_phone_number' column to all student tables.
+-- You can run this in your Supabase SQL editor.
+
+-- Add parent_phone_number column to b1
+ALTER TABLE b1
+ADD COLUMN parent_phone_number TEXT;
+
+-- Add parent_phone_number column to b2
+ALTER TABLE b2
+ADD COLUMN parent_phone_number TEXT;
+
+-- Add parent_phone_number column to b3
+ALTER TABLE b3
+ADD COLUMN parent_phone_number TEXT;
+
+-- Add parent_phone_number column to b4
+ALTER TABLE b4
+ADD COLUMN parent_phone_number TEXT;

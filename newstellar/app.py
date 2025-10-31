@@ -149,14 +149,14 @@ def login_required(role=None):
         return decorated_function
     return decorator
 
-# --- Authentication Logic ---
+# --- Authentication Logic (MODIFIED) ---
 
 def fetch_and_verify_user(username, password):
     """Finds user across tables and verifies password."""
+    # Assume username could be roll_no (student), username (teacher/admin), or email (parent/student)
     username_lower = username.lower() 
 
-    # 1. Try Student Tables
-    # Determine batch from username (roll_no)
+    # 1. Try Student Tables (by roll_no)
     batch_table = determine_student_batch(username_lower)
     if batch_table:
         try:
@@ -167,16 +167,18 @@ def fetch_and_verify_user(username, password):
             data = response.json()
             if data and len(data) == 1:
                 user_data = data[0]
+                # Check password
                 if check_password_hash(user_data.get('student_password', ''), password):
-                    user_data.pop('student_password', None) 
+                    user_data.pop('student_password', None) # Remove hash from session data
+                    user_data.pop('parent_password', None)
                     user_data['role'] = 'student'
                     user_data['batch'] = batch_table 
                     user_data['roll_no'] = user_data.get('roll_no', username_lower) # Ensure roll_no is set
                     return user_data
         except Exception as e:
-            print(f"Error querying {batch_table}: {e}")
+            print(f"Error querying {batch_table} by roll_no: {e}")
 
-    # 2. Try Teacher Table
+    # 2. Try Teacher Table (by username)
     try:
         url = get_supabase_rest_url(TEACHER_TABLE)
         params = {'select': '*,teacher_password', 'username': f'eq.{username_lower}'}
@@ -193,7 +195,7 @@ def fetch_and_verify_user(username, password):
     except Exception as e:
         print(f"Error querying {TEACHER_TABLE}: {e}")
 
-    # 3. Try Admin Table
+    # 3. Try Admin Table (by username)
     try:
         url = get_supabase_rest_url(ADMIN_TABLE)
         params = {'select': '*,password', 'username': f'eq.{username_lower}'}
@@ -209,6 +211,56 @@ def fetch_and_verify_user(username, password):
     except Exception as e:
         print(f"Error querying {ADMIN_TABLE}: {e}")
 
+    # 4. --- NEW: Try Parent Login (by parent_email) ---
+    # This will check b1, b2, b3, b4 for a matching parent_email
+    for batch_table in STUDENT_TABLES:
+        try:
+            url = get_supabase_rest_url(batch_table)
+            # Query by parent_email (which is what the parent enters as 'username')
+            params = {'select': '*,parent_password,roll_no,student_name', 'parent_email': f'eq.{username_lower}'}
+            response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data and len(data) == 1:
+                parent_data = data[0]
+                # Verify the parent_password
+                # THIS ASSUMES parent_password IS HASHED in the database
+                if check_password_hash(parent_data.get('parent_password', ''), password):
+                    # Create a session object for the parent
+                    user_data = {
+                        'role': 'parent',
+                        'parent_email': parent_data['parent_email'],
+                        'student_roll_no': parent_data['roll_no'],
+                        'student_name': parent_data['student_name'],
+                        'batch': batch_table # Store which batch table the student is in
+                    }
+                    return user_data
+        except Exception as e:
+            print(f"Error querying {batch_table} for parent: {e}")
+            
+    # 5. --- NEW: Try Student Login by Email ---
+    # This allows students to log in with email OR roll_no
+    for batch_table in STUDENT_TABLES:
+        try:
+            url = get_supabase_rest_url(batch_table)
+            params = {'select': '*,student_password,roll_no', 'student_email': f'eq.{username_lower}'}
+            response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if data and len(data) == 1:
+                user_data = data[0]
+                if check_password_hash(user_data.get('student_password', ''), password):
+                    user_data.pop('student_password', None)
+                    user_data.pop('parent_password', None)
+                    user_data['role'] = 'student'
+                    user_data['batch'] = batch_table
+                    user_data['roll_no'] = user_data.get('roll_no')
+                    return user_data
+        except Exception as e:
+            print(f"Error querying {batch_table} by student_email: {e}")
+
+
     return None # No user found or password incorrect
 
 # --- Flask Routes ---
@@ -222,6 +274,12 @@ def fetch_and_verify_user(username, password):
 def index():
     """Renders the main combined dashboard."""
     user = session['user']
+    
+    # --- NEW: Redirect parents away from the main index ---
+    if user.get('role') == 'parent':
+        return redirect(url_for('parent_dashboard'))
+    # --- End of New Redirect ---
+    
     events_data = []
     holidays_data = []
     daily_schedule = []
@@ -322,28 +380,41 @@ def index():
 def login_page():
     """Handles GET request for login page and POST for login attempt."""
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        # Changed 'username' to 'email_or_username' for clarity
+        email_or_username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip() 
 
-        if not username or not password:
-            flash("Username and password are required.", "danger")
+        if not email_or_username or not password:
+            flash("Username/Email and password are required.", "danger")
             return render_template("login.html")
 
-        user_data = fetch_and_verify_user(username, password)
+        # Pass the email or username to the verification function
+        user_data = fetch_and_verify_user(email_or_username, password)
 
         if user_data:
             session['user'] = user_data # Store user data in session
-            display_name = (user_data.get('student_name') or
-                            user_data.get('teacher_name') or
-                            user_data.get('username', 'User'))
+            
+            # Determine display name
+            display_name = "User"
+            if user_data.get('role') == 'parent':
+                display_name = f"Parent of {user_data.get('student_name', 'Student')}"
+            else:
+                display_name = (user_data.get('student_name') or
+                                user_data.get('teacher_name') or
+                                user_data.get('username', 'User'))
+
             flash(f"Welcome back, {display_name}!", "success")
             
             # --- START OF MODIFICATION ---
             # Check the user's role and redirect accordingly
-            if user_data.get('role') == 'admin':
-                return redirect(url_for('admin_dashboard')) # Redirect admins to admin dashboard
+            role = user_data.get('role')
+            if role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            elif role == 'parent':
+                return redirect(url_for('parent_dashboard')) # <-- NEW PARENT REDIRECT
             else:
-                return redirect(url_for('index')) # Redirect all other users to main dashboard
+                # This covers 'student' and 'teacher'
+                return redirect(url_for('index'))
             # --- END OF MODIFICATION ---
 
         else:
@@ -352,7 +423,11 @@ def login_page():
 
     # If GET request
     if 'user' in session:
-        return redirect(url_for('index')) # Redirect logged-in users to new dashboard
+        # --- MODIFICATION: Redirect logged-in parents to their dashboard ---
+        if session['user'].get('role') == 'parent':
+            return redirect(url_for('parent_dashboard'))
+        return redirect(url_for('index')) # Redirect other logged-in users to main dashboard
+    
     return render_template("login.html")
 
 @app.route("/logout")
@@ -373,16 +448,24 @@ def signup_page():
         password = request.form.get("student_password", "").strip()
         confirm_password = request.form.get("confirm_password", "").strip()
 
-        if not all([roll_no, student_name, student_email, password, confirm_password]):
-            flash("All fields are required.", "danger")
+        # --- NEW: Parent fields ---
+        parent_email = request.form.get("parent_email", "").strip().lower()
+        parent_password = request.form.get("parent_password", "").strip()
+        
+        # Basic validation
+        if not all([roll_no, student_name, student_email, password, confirm_password, parent_email, parent_password]):
+            flash("All fields (including parent details) are required.", "danger")
             return render_template("signup.html")
         if password != confirm_password:
-            flash("Passwords do not match.", "danger")
+            flash("Student passwords do not match.", "danger")
             return render_template("signup.html")
         if len(password) < 8:
-            flash("Password must be at least 8 characters long.", "danger")
+            flash("Student password must be at least 8 characters long.", "danger")
             return render_template("signup.html")
-
+        if len(parent_password) < 8:
+            flash("Parent password must be at least 8 characters long.", "danger")
+            return render_template("signup.html")
+        
         batch_table = determine_student_batch(roll_no)
         if not batch_table:
             flash("Invalid Roll Number format or year. Must start with b22, b23, b24, or b25.", "danger")
@@ -393,15 +476,22 @@ def signup_page():
             url_check = get_supabase_rest_url(batch_table)
             params_check_roll = {'select': 'roll_no', 'roll_no': f'eq.{roll_no}'}
             params_check_email = {'select': 'student_email', 'student_email': f'eq.{student_email}'}
+            params_check_parent_email = {'select': 'parent_email', 'parent_email': f'eq.{parent_email}'}
+
 
             response_roll = requests.get(url_check, headers=SUPABASE_HEADERS, params=params_check_roll, timeout=5)
             response_email = requests.get(url_check, headers=SUPABASE_HEADERS, params=params_check_email, timeout=5)
+            response_parent_email = requests.get(url_check, headers=SUPABASE_HEADERS, params=params_check_parent_email, timeout=5)
+
 
             if response_roll.ok and response_roll.json():
                  flash(f"Roll number '{roll_no}' is already registered.", "danger")
                  return render_template("signup.html")
             if response_email.ok and response_email.json():
                  flash(f"Email '{student_email}' is already registered.", "danger")
+                 return render_template("signup.html")
+            if response_parent_email.ok and response_parent_email.json():
+                 flash(f"Parent Email '{parent_email}' is already registered.", "danger")
                  return render_template("signup.html")
 
         except requests.exceptions.RequestException as e:
@@ -412,13 +502,18 @@ def signup_page():
             flash(str(e), "danger")
             return render_template("signup.html")
 
-        hashed_password = generate_password_hash(password)
+        # Hash both passwords
+        hashed_student_password = generate_password_hash(password)
+        hashed_parent_password = generate_password_hash(parent_password)
+
 
         new_student_data = {
             "roll_no": roll_no,
             "student_name": student_name,
             "student_email": student_email,
-            "student_password": hashed_password, # Store the HASH
+            "student_password": hashed_student_password, # Store the HASH
+            "parent_email": parent_email,
+            "parent_password": hashed_parent_password # Store the HASH
         }
 
         # Insert into Supabase
@@ -529,6 +624,42 @@ def student_marks_page():
         supabase_url=SUPABASE_URL,
         supabase_key=SUPABASE_ANON_KEY
     )
+
+# --- NEW PARENT DASHBOARD ROUTE ---
+@app.route("/parent/dashboard")
+@login_required(role='parent')
+def parent_dashboard():
+    """Renders the parent dashboard."""
+    user = session.get('user') # This user is the parent
+    
+    student_roll_no = user.get('student_roll_no')
+    student_name = user.get('student_name')
+    batch_table = user.get('batch') # e.g., 'b1'
+
+    if not all([student_roll_no, student_name, batch_table]):
+        flash("Could not identify student information. Please log in again.", "danger")
+        return redirect(url_for('login_page'))
+        
+    # Determine the correct tables for this student
+    attendance_table = determine_attendance_table(batch_table)
+    marks_table = get_marks_table_for_student(student_roll_no) # Use roll_no for this one
+
+    if not attendance_table or not marks_table:
+        flash("Could not find student records.", "warning")
+        return redirect(url_for('index'))
+
+    # Pass all necessary info to the template for JS fetching
+    return render_template(
+        "parent_dashboard.html",
+        user=user, # Parent's session data
+        student_roll_no=student_roll_no,
+        student_name=student_name,
+        attendance_table=attendance_table,
+        marks_table=marks_table,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
+    )
+# --- END OF NEW PARENT ROUTE ---
 
 
 # --- Placeholder Routes for Teacher/Admin Actions (Kept) ---
@@ -1263,5 +1394,3 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
-
-
