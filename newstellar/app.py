@@ -1092,6 +1092,14 @@ def update_course():
 # --- END: COURSE MANAGEMENT ROUTES ---
 
 # --- START: TEACHER MANAGEMENT ROUTES (NEW & CORRECTED) ---
+# --- Find this route in app.py ---
+# @app.route("/admin/teachers")
+# ...
+# def manage_teachers_page():
+# ... (old code) ...
+
+# --- AND REPLACE IT WITH THIS ---
+
 @app.route("/admin/teachers")
 @login_required(role='admin')
 def manage_teachers_page():
@@ -1104,12 +1112,13 @@ def manage_teachers_page():
     }
     
     search_username = request.args.get('search_username', '').strip()
-    search_name = request.args.get('search_name', '').strip()
+    search_name = request.args.get('search_name', '').strip() # Name dropdown uses username as value
 
+    # Use 'eq' (exact match) for dropdowns
     if search_username:
-        search_params['username'] = f'ilike.%{search_username}%'
+        search_params['username'] = f'eq.{search_username}'
     if search_name:
-        search_params['teacher_name'] = f'ilike.%{search_name}%'
+        search_params['username'] = f'eq.{search_name}' # Both dropdowns will submit the username
 
     try:
         url = get_supabase_rest_url(TEACHER_TABLE)
@@ -1124,7 +1133,13 @@ def manage_teachers_page():
         flash(str(e), "danger")
         return redirect(url_for('admin_dashboard'))
         
-    return render_template("manage_teacher.html", teachers=teachers, search_params=request.args)
+    # Pass the teachers list as JSON for the dropdowns
+    return render_template(
+        "manage_teacher.html", 
+        teachers=teachers, 
+        search_params=request.args,
+        all_teachers_json=json.dumps(teachers) # <-- ADDED THIS LINE
+    )
 
 
 @app.route('/admin/teachers/add', methods=['POST'])
@@ -1462,5 +1477,6 @@ def internal_server_error(e):
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
 
 
