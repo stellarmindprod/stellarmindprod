@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}StellarMind Prod{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Base styles adapted from static/style.css */
+        body {
+            font-family: 'Poppins', sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f4f8;
+            color: #1c2b3a;
+            margin: 0;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+            flex-grow: 1; /* Make main content fill space */
+        }
+        /* Navbar */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #ffffff;
+            padding: 0.75rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            /* Removed margin-bottom */
+        }
+        .logo-container { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-img { height: 40px; width: 40px; border-radius: 50%; object-fit: cover; }
+        .logo-name { font-size: 1.2rem; font-weight: 600; }
+        .nav-links { display: flex; align-items: center; gap: 1rem; list-style: none; padding: 0; margin: 0; } /* Added list-style etc */
+        .nav-links a { color: #1c2b3a; text-decoration: none; padding: 0.5rem; transition: color 0.3s ease; display: inline-flex; align-items: center; gap: 0.3rem;}
+        .nav-links a:hover { color: #007bff; }
+        .nav-links i { margin-right: 0.25rem; }
+        .user-greeting { color: #555; margin-right: 0.5rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+        /* Footer */
+        .footer {
+            background-color: #ffffff;
+            color: #6b7a8c;
+            text-align: center;
+            padding: 1.5rem 1rem;
+            margin-top: auto; /* Push footer to bottom */
+            border-top: 1px solid #e0e0e0;
+        }
+        /* Flash Messages */
+        .flash-messages { padding: 1rem 1rem 0 1rem; } /* Added padding */
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid transparent; font-size: 0.95rem; }
+        .alert-success { background-color: #d1e7dd; color: #0f5132; border-color: #badbcc; }
+        .alert-danger { background-color: #f8d7da; color: #842029; border-color: #f5c2c7; }
+        .alert-warning { background-color: #fff3cd; color: #664d03; border-color: #ffecb5; }
+        .alert-info { background-color: #cff4fc; color: #055160; border-color: #b6effb; }
+
+        /* Basic Button */
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #0d6efd; /* Bootstrap blue */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: background-color 0.3s ease;
+            text-align: center;
+        }
+        .btn:hover { background-color: #0b5ed7; }
+
+        /* Basic Table */
+        table { width: 100%; border-collapse: collapse; background-color: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        th { background-color: #e9ecef; font-weight: 600; color: #495057; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #f8f9fa; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; align-items: flex-start; }
+            .nav-links { margin-top: 0.5rem; width: 100%; justify-content: space-between; flex-wrap: wrap; } /* Allow wrapping */
+            .user-greeting { max-width: 100px; } /* Adjust greeting width */
+            .container { padding: 0.5rem; }
+            th, td { font-size: 0.9rem; padding: 8px 10px; }
+            .flash-messages { padding: 0.5rem 0.5rem 0 0.5rem; }
+            .alert { padding: 0.75rem; font-size: 0.9rem; }
+            .footer { padding: 1rem; font-size: 0.9rem; }
+        }
+         @media (max-width: 480px) {
+             .logo-name { font-size: 1rem; }
+             .nav-links a, .user-greeting { font-size: 0.9rem; padding: 0.3rem;}
+             .nav-links { gap: 0.5rem; }
+         }
+        /* Notifications */
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+        }
+        .notification-badge {
+            position: absolute;
+            top: 2px;
+            right: -6px;
+            background-color: #dc3545;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 5px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: none; /* hidden if 0 */
+        }
+        .notification-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 35px;
+            background-color: #fff;
+            min-width: 300px;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            z-index: 1000;
+            padding: 0;
+            border: 1px solid #dee2e6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .notification-dropdown.show { display: block; }
+        .notification-header {
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 600;
+            border-radius: 8px 8px 0 0;
+        }
+        .notification-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f1f3f5;
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+        .notification-item:hover { background-color: #f8f9fa; }
+        .notification-item.unread { background-color: #eaf1f7; }
+        .notification-content { font-size: 0.9rem; margin-bottom: 4px; }
+        .notification-meta { font-size: 0.75rem; color: #6c757d; }
+        .notification-empty { padding: 15px; text-align: center; color: #6c757d; font-size: 0.9rem; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo-container">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo-img" onerror="this.onerror=null; this.src='https://placehold.co/40x40/0d6efd/ffffff?text=SM';">
+            <span class="logo-name">StellarMind Prod</span>
+        </div>
+        <ul class="nav-links"> {# Changed div to ul for semantic correctness #}
+            {% if session.user %}
+                <li><span class="user-greeting">Hello, {{ (session.user.get('student_name') or session.user.get('teacher_name') or session.user.username)|truncate(20) }}!</span></li>
+                
+                {% if session.user.role == 'admin' %}
+                    <li><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                {% endif %}
+
+                {% if session.user.role == 'student' %}
+                    <li><a href="{{ url_for('student_marks_page') }}"><i class="fas fa-clipboard-check"></i> My Marks</a></li>
+                {% endif %}
+
+                {% if session.user.role in ['teacher', 'admin'] %}
+                    <li><a href="{{ url_for('send_notification_page') }}"><i class="fas fa-paper-plane"></i> Send Notification</a></li>
+                {% endif %}
+
+                {% if session.user.role in ['student', 'teacher', 'admin'] %}
+                    <li class="notification-bell" id="notification-bell">
+                        <a>
+                            <i class="fas fa-bell"></i> Notifications
+                            <span class="notification-badge" id="notification-badge">0</span>
+                        </a>
+                        <!-- Dropdown container -->
+                        <div class="notification-dropdown" id="notification-dropdown">
+                            <div class="notification-header">Notifications</div>
+                            <div id="notification-list">
+                                <div class="notification-empty">Loading...</div>
+                            </div>
+                        </div>
+                    </li>
+                {% endif %}
+
+                <!-- NEW LINK FOR PARENTS -->
+                {% if session.user.role == 'parent' %}
+                    <li><a href="#" id="open-medical-modal-btn" style="color: #4299e1;"><i class="fas fa-file-medical"></i> Upload Certificate</a></li>
+                {% endif %}
+
+                <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            {% else %}
+                <li><a href="{{ url_for('login_page') }}"><i class="fas fa-sign-in-alt"></i> Login</a></li>
+                <li><a href="{{ url_for('signup_page') }}"><i class="fas fa-user-plus"></i> Sign Up</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages container"> {# Added container class for padding #}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>&copy; {{ now.year }} StellarMind Prod - NIT Sikkim</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const bell = document.getElementById('notification-bell');
+            const dropdown = document.getElementById('notification-dropdown');
+            const badge = document.getElementById('notification-badge');
+            const list = document.getElementById('notification-list');
+            
+            if (!bell) return;
+
+            // Fetch notifications
+            function fetchNotifications() {
+                fetch('/api/notifications')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.error) return;
+                        
+                        const notifications = data.notifications || [];
+                        const unreadCount = data.unread_count || 0;
+                        
+                        // Update badge
+                        if (unreadCount > 0) {
+                            badge.textContent = unreadCount;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                        
+                        // Update list
+                        if (notifications.length === 0) {
+                            list.innerHTML = '<div class="notification-empty">No notifications</div>';
+                            return;
+                        }
+                        
+                        list.innerHTML = '';
+                        notifications.forEach(n => {
+                            const item = document.createElement('div');
+                            item.className = 'notification-item' + (n.is_read ? '' : ' unread');
+                            item.innerHTML = `
+                                <div class="notification-content">${n.message}</div>
+                                <div class="notification-meta">${n.sender_name} &bull; ${new Date(n.created_at).toLocaleDateString()}</div>
+                            `;
+                            // Mark as read on click
+                            item.addEventListener('click', function(e) {
+                                e.stopPropagation(); // Avoid closing dropdown immediately maybe
+                                if (!n.is_read) {
+                                    fetch('/api/notifications/read', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ notification_id: n.id })
+                                    }).then(res => {
+                                        if (res.ok) fetchNotifications();
+                                    });
+                                }
+                            });
+                            list.appendChild(item);
+                        });
+                    })
+                    .catch(err => console.error("Error fetching notifications:", err));
+            }
+
+            // Toggle dropdown
+            bell.addEventListener('click', function(e) {
+                e.preventDefault();
+                dropdown.classList.toggle('show');
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!bell.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+
+            // Initial fetch
+            fetchNotifications();
+            // Polling every 30 seconds
+            setInterval(fetchNotifications, 30000);
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+

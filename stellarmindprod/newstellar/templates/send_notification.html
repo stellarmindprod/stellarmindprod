@@ -1,0 +1,100 @@
+{% extends "layout.html" %}
+
+{% block title %}Send Notification{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .notification-container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        .notification-container h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: #212529;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #495057;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        select.form-control {
+            appearance: auto;
+        }
+        .btn-send {
+            width: 100%;
+            padding: 12px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+        .btn-send:hover {
+            background-color: #0b5ed7;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="notification-container">
+    <h2><i class="fas fa-paper-plane" style="color: #0d6efd;"></i> Send Notification</h2>
+    
+    <form method="POST" action="{{ url_for('send_notification_page') }}">
+        <div class="form-group">
+            <label for="target_batch"><i class="fas fa-users"></i> Target Batch</label>
+            <select id="target_batch" name="target_batch" class="form-control" required>
+                <option value="ALL">All Batches</option>
+                <option value="b1">Batch B1 (1st Year)</option>
+                <option value="b2">Batch B2 (2nd Year)</option>
+                <option value="b3">Batch B3 (3rd Year)</option>
+                <option value="b4">Batch B4 (4th Year)</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="target_department"><i class="fas fa-building"></i> Target Department</label>
+            <select id="target_department" name="target_department" class="form-control" required>
+                <option value="ALL">All Departments</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Mechanical">Mechanical</option>
+                <option value="Civil">Civil</option>
+                <option value="Mathematics">Mathematics</option>
+                <option value="Physics">Physics</option>
+                <option value="Chemistry">Chemistry</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="message"><i class="fas fa-comment-alt"></i> Notification Message</label>
+            <textarea id="message" name="message" class="form-control" rows="5" placeholder="Type your notification here..." required></textarea>
+        </div>
+        
+        <button type="submit" class="btn-send"><i class="fas fa-broadcast-tower"></i> Broadcast Message</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,906 @@
+{% extends "layout.html" %}
+
+{% block title %}Teacher Portal — Enter Marks{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+
+    <style>
+        /* Light theme variables from layout.html */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --transition-speed: 0.5s;
+        }
+
+        /* Override layout.html body if needed */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-color);
+        }
+
+        /* Main container for this page */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .teacher-header {
+            background: var(--secondary-bg);
+            border: 1px solid #e0e0e0;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .teacher-header h1 {
+            font-size: 1.5rem;
+            color: var(--text-color);
+        }
+
+        .teacher-header p {
+            font-size: 1rem;
+            color: var(--subtle-text);
+            margin-top: 0.25rem;
+        }
+
+        .teacher-header .chip {
+            background: var(--accent-end);
+            color: white;
+            border-radius: 2rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 1rem;
+            min-height: 2.5rem; /* Ensure it doesn't jump */
+        }
+
+        .controls-wrapper {
+            background: var(--secondary-bg);
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            align-items: flex-end;
+        }
+
+        .controls .row {
+            min-width: 200px;
+        }
+
+        .controls label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .controls label i {
+            margin-right: 0.5rem;
+            color: var(--accent-start);
+        }
+
+        .controls input,
+        .controls select {
+            width: 100%;
+            background: var(--primary-bg);
+            border: 1px solid #ddd;
+            border-radius: 0.75rem;
+            color: var(--text-color);
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-family: 'Poppins', sans-serif;
+            -webkit-appearance: none; /* For iOS styling */
+            -moz-appearance: none;
+            appearance: none;
+        }
+        
+        /* Custom arrow for select */
+        .controls select {
+             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%236b7a8c' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
+             background-repeat: no-repeat;
+             background-position: right 0.75rem center;
+             background-size: 16px 12px;
+             padding-right: 2.5rem; /* Make space for arrow */
+        }
+
+        .controls input:focus,
+        .controls select:focus {
+            outline: none;
+            border-color: var(--accent-start);
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .btn {
+            border: 0;
+            border-radius: 2rem;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: 'Poppins', sans-serif;
+            display: inline-flex; /* For icon alignment */
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn i {
+            margin-right: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .btn.primary:hover {
+            box-shadow: 0 6px 20px rgba(0, 135, 197, 0.4);
+        }
+
+        .btn.ghost {
+            background: transparent;
+            color: var(--subtle-text);
+            border: 1px solid #ccc;
+        }
+
+        .btn.ghost:hover {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border-color: #bbb;
+        }
+
+        .btn.success {
+            background: var(--success-color);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+        }
+
+        .btn.success:hover {
+            box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn:disabled {
+            background: #e0e0e0;
+            color: #aaa;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .grid-section {
+            margin-top: 2rem;
+            background: var(--secondary-bg);
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .grid-wrap {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 1rem;
+        }
+
+        .marks-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 600px;
+        }
+
+        .marks-table th,
+        .marks-table td {
+            border: 1px solid #e0e0e0;
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .marks-table th {
+            background: var(--card-bg);
+            font-weight: 600;
+        }
+
+        .marks-table td input.marks-input,
+        .marks-table td input.max-input {
+            background: var(--primary-bg);
+            border: 1px solid #ccc;
+            border-radius: 0.5rem;
+            color: var(--text-color);
+            padding: 0.5rem;
+            font-size: 1rem;
+            width: 6rem;
+            text-align: center;
+        }
+        
+        .marks-table td input.max-input.readonly {
+            background: #e0e6ed;
+            cursor: not-allowed;
+        }
+
+        .marks-table td input.marks-input:focus,
+        .marks-table td input.max-input:focus {
+            outline: none;
+            border-color: var(--accent-start);
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        }
+
+        .roll {
+            font-weight: 700;
+        }
+
+        .student-name {
+            text-align: left;
+        }
+
+        .save-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .status {
+            color: var(--subtle-text);
+            font-weight: 500;
+        }
+
+        /* Custom Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--secondary-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1rem 3rem var(--shadow-heavy);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-message {
+            font-size: 1.2rem;
+            color: var(--text-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <main class="container">
+        <section id="teacherHeader" class="teacher-header">
+            <h1 id="teacherName">Welcome!</h1>
+            <p>Please select a subject to enter marks:</p>
+            <div id="subjectChip" class.bind="chip">Select a subject below</div>
+        </section>
+
+        <section class="controls-wrapper">
+            <div class="controls">
+                
+                <!-- Semester Selection -->
+                <div class="row">
+                    <label for="semesterSelect"><i class="fa-solid fa-layer-group"></i> Semester</label>
+                    <select id="semesterSelect">
+                        <option value="">— Select Semester —</option>
+                        <option value="1">Semester 1</option>
+                        <option value="2">Semester 2</option>
+                        <option value="3">Semester 3</option>
+                        <option value="4">Semester 4</option>
+                        <option value="5">Semester 5</option>
+                        <option value="6">Semester 6</option>
+                        <option value="7">Semester 7</option>
+                        <option value="8">Semester 8</option>
+                    </select>
+                </div>
+
+                <!-- Subject Selection -->
+                <div class="row">
+                    <label for="subjectSelect"><i class="fa-solid fa-book"></i> Subject</label>
+                    <select id="subjectSelect" disabled>
+                        <option value="">— Select Semester First —</option>
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <!-- Exam Selection -->
+                <div class="row">
+                    <label for="examSelect"><i class="fa-solid fa-pen-to-square"></i> Exam</label>
+                    <select id="examSelect">
+                         <option value="">— Select Exam —</option>
+                         <option value="Mid 1">Mid 1</option>
+                         <option value="Mid 2">Mid 2</option>
+                         <option value="End Term">End Term</option>
+                    </select>
+                </div>
+
+                <div class="row actions">
+                    <button id="buildGridBtn" class="btn primary" disabled><i class="fa-solid fa-table-list"></i> Build Grid</button>
+                    <button id="clearGridBtn" class="btn ghost"><i class="fa-regular fa-trash-can"></i> Clear</button>
+                </div>
+            </div>
+        </section>
+
+
+        <section id="gridSection" class="grid-section" style="display:none;">
+            <div class="grid-wrap">
+                <table id="marksTable" class="marks-table">
+                    <thead>
+                        <tr>
+                            <th>Roll Number</th>
+                            <th>Student Name</th>
+                            <th>Max Marks</th>
+                            <th>Marks</th>
+                        </tr>
+                    </thead>
+                    <tbody id="marksBody"></tbody>
+                </table>
+            </div>
+            <div class="save-bar">
+                <button id="saveBtn" class="btn success"><i class="fa-solid fa-floppy-disk"></i> Save Marks</button>
+                <span id="saveStatus" class="status"></span>
+            </div>
+        </section>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script type="module">
+        // Data passed from Flask
+        const SUPABASE_URL = "{{ supabase_url | safe }}";
+        const SUPABASE_KEY = "{{ supabase_key | safe }}";
+        const TEACHER_NAME = "{{ user.teacher_name | safe }}";
+        const all_assigned_courses = {{ all_assigned_courses_json | safe }};
+        const marksTables = {{ marks_tables_json | safe }}; // ["marks1", "marks2", "marks3", "marks4"]
+        
+        // Map semester numbers to their corresponding marks tables
+        const MARKS_TABLE_MAP = {
+            1: marksTables[0], // marks1
+            2: marksTables[0], // marks1
+            3: marksTables[1], // marks2
+            4: marksTables[1], // marks2
+            5: marksTables[2], // marks3
+            6: marksTables[2], // marks3
+            7: marksTables[3], // marks4
+            8: marksTables[3]  // marks4
+        };
+        
+        // Map semester numbers to the correct student table (b1, b2, etc.)
+        const STUDENT_TABLE_MAP = {
+            1: "b1",
+            2: "b1",
+            3: "b2",
+            4: "b2",
+            5: "b3",
+            6: "b3",
+            7: "b4",
+            8: "b4"
+        };
+
+        // Initialize Supabase client
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- DOM Elements ---
+        const teacherNameEl = document.getElementById('teacherName'),
+            subjectChipEl = document.getElementById('subjectChip'),
+            semesterSelect = document.getElementById('semesterSelect'),
+            subjectSelect = document.getElementById('subjectSelect'),
+            examSelect = document.getElementById('examSelect'),
+            buildGridBtn = document.getElementById('buildGridBtn'),
+            clearGridBtn = document.getElementById('clearGridBtn'),
+            gridSection = document.getElementById('gridSection'),
+            marksBody = document.getElementById('marksBody'),
+            saveBtn = document.getElementById('saveBtn'),
+            saveStatus = document.getElementById('saveStatus');
+        
+        // --- State Variables ---
+        let currentSubjectCode = null;
+        let currentSubjectName = null;
+        let currentSubjectCredits = null; // <-- state variable for credits
+        let currentSemester = null;
+        let currentMarksTable = null; // e.g., "marks2"
+        let currentStudentTable = null; // e.g., "b2"
+        let currentExamType = null; // e.g., "mid1"
+
+
+        /**
+         * Creates and displays a custom modal.
+         * @param {string} message - The message to display.
+         */
+        function createCustomModal(message) {
+            const existingModal = document.querySelector('.custom-modal-overlay');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-overlay custom-modal-overlay';
+            modalOverlay.style.display = 'flex'; // Show it
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+
+            const messageText = document.createElement('p');
+            messageText.className = 'modal-message';
+            messageText.textContent = message;
+
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.className = 'modal-buttons';
+
+            const okBtn = document.createElement('button');
+            okBtn.textContent = 'OK';
+            okBtn.className = 'btn primary';
+            okBtn.onclick = () => {
+                modalOverlay.remove();
+            };
+
+            buttonsContainer.appendChild(okBtn);
+            modalContent.appendChild(messageText);
+            modalContent.appendChild(buttonsContainer);
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+        }
+
+        /**
+         * Formats the exam name for the database.
+         * @param {string} exam - The display name (e.g., "Mid 1").
+         * @returns {string} - The database name (e.g., "mid1").
+         */
+        function formatExamType(exam) {
+            switch (exam) {
+                case 'Mid 1': return 'mid1';
+                case 'Mid 2': return 'mid2';
+                case 'End Term': return 'endsem';
+                default: return exam.toLowerCase().replace(/\s/g, '');
+            }
+        }
+
+        /**
+         * Gets default max marks for an exam type.
+         */
+        function getDefaultMaxMarks(exam) {
+            if (exam === 'Mid 1' || exam === 'Mid 2') return 15;
+            if (exam === 'End Term') return 50;
+            return 100;
+        }
+
+        /**
+         * Validates the inputs and enables/disables action buttons.
+         */
+        function validateInputs() {
+            currentExamType = examSelect.value;
+            const isReady = subjectSelect.value && currentMarksTable && currentExamType;
+            buildGridBtn.disabled = !isReady;
+        }
+
+        /**
+         * Updates the state variables based on the subject selection, including fetching credits.
+         */
+        function handleSubjectChange() {
+            const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
+            
+            if (!selectedOption || !selectedOption.value) {
+                currentSubjectCode = null;
+                currentSubjectName = null;
+                currentSubjectCredits = null; // Reset credits
+                currentSemester = null;
+                currentMarksTable = null;
+                currentStudentTable = null;
+                subjectChipEl.textContent = 'Select a subject below';
+            } else {
+                currentSubjectCode = selectedOption.value;
+                currentSubjectName = selectedOption.dataset.name;
+                currentSemester = selectedOption.dataset.semester ? parseInt(selectedOption.dataset.semester, 10) : null;
+                
+                // Find the selected course in the data passed from Flask to get its credits
+                const selectedCourse = all_assigned_courses.find(course => course.course_code === currentSubjectCode);
+                currentSubjectCredits = selectedCourse ? selectedCourse.credits : null; // Store credits
+                if (currentSubjectCredits === null) {
+                    console.warn(`Credits not found for subject ${currentSubjectCode}. Credits column might be NULL when saving.`);
+                     createCustomModal(`Warning: Credits not found for subject ${currentSubjectCode} in the 'courses' table. Credits will be saved as NULL.`);
+                }
+
+                // Set the correct marks and student tables based on semester
+                currentMarksTable = currentSemester ? MARKS_TABLE_MAP[currentSemester] : null;
+                currentStudentTable = currentSemester ? STUDENT_TABLE_MAP[currentSemester] : null;
+                
+                subjectChipEl.textContent = `${currentSubjectName} (${currentSubjectCode}) - Sem ${currentSemester}`;
+            }
+            
+            console.log(`State Updated: Subject: ${currentSubjectCode}, Credits: ${currentSubjectCredits}, Sem: ${currentSemester}, MarksTable: ${currentMarksTable}, StuTable: ${currentStudentTable}`);
+            validateInputs(); // Re-validate inputs after state change
+        }
+
+        /**
+         * Populates the Subject dropdown based on the selected Semester.
+         */
+        function onSemesterChange() {
+            const selectedSem = semesterSelect.value;
+            
+            // Clear subject dropdown
+            subjectSelect.innerHTML = '';
+            
+            if (!selectedSem) {
+                subjectSelect.disabled = true;
+                let defaultOption = new Option('— Select Semester First —', '');
+                subjectSelect.appendChild(defaultOption);
+            } else {
+                // Find courses matching the selected semester AND assigned to the teacher
+                const matchingCourses = all_assigned_courses.filter(course => 
+                    course.semester === parseInt(selectedSem, 10)
+                );
+
+                if (matchingCourses.length > 0) {
+                    subjectSelect.disabled = false;
+                    let defaultOption = new Option('— Select Subject —', '');
+                    subjectSelect.appendChild(defaultOption);
+
+                    matchingCourses.forEach(course => {
+                        let option = new Option(
+                            `${course.course_name} (${course.course_code})`, 
+                            course.course_code
+                        );
+                        option.dataset.semester = course.semester; // Store semester for table mapping
+                        option.dataset.name = course.course_name;   // Store name for display
+                        subjectSelect.appendChild(option);
+                    });
+                } else {
+                    subjectSelect.disabled = true;
+                    let noCoursesOption = new Option('No subjects assigned for this sem', '');
+                    subjectSelect.appendChild(noCoursesOption);
+                }
+            }
+            
+            // Reset subject-dependent state and re-validate
+            handleSubjectChange();
+        }
+
+        /**
+         * Fetches student list and builds the marks grid.
+         */
+        async function buildGrid() {
+            if (!currentSubjectCode || !currentMarksTable || !currentStudentTable || !currentExamType) {
+                createCustomModal("Please select a semester, subject, and exam type.");
+                return;
+            }
+
+            saveStatus.textContent = 'Building grid...';
+            const exam = currentExamType;
+            const examTypeDb = formatExamType(exam);
+            
+            try {
+                // 1. Fetch students for this batch (semester)
+                const { data: studentsData, error: studentsError } = await supabaseClient
+                    .from(currentStudentTable) // Use the correct student table based on semester
+                    .select('roll_no, student_name');
+
+                if (studentsError) throw studentsError;
+                if (!studentsData || studentsData.length === 0) {
+                     throw new Error(`No students found in batch table '${currentStudentTable}'.`);
+                }
+
+                // Sort students by roll_no for consistent order
+                studentsData.sort((a, b) => a.roll_no.localeCompare(b.roll_no));
+                
+                const studentsMap = new Map(studentsData.map(s => [s.roll_no, s.student_name]));
+                const allRollNumbers = studentsData.map(s => s.roll_no);
+                
+                // 2. Fetch existing marks for this subject to pre-fill the grid
+                saveStatus.textContent = 'Fetching existing marks...';
+                // Fetch all relevant columns: roll_no, the specific exam column, and credits
+                const { data: existingMarks, error: marksError } = await supabaseClient
+                    .from(currentMarksTable)
+                    .select(`roll_no, credits, ${examTypeDb}`) // Fetch the specific exam column (e.g., mid1)
+                    .eq('subject_code', currentSubjectCode);
+
+                if (marksError) throw marksError;
+                
+                // Create a map for easy lookup of existing marks by roll_no
+                const marksMap = new Map(existingMarks.map(m => [m.roll_no.toLowerCase(), m]));
+                const defaultMax = getDefaultMaxMarks(exam);
+                
+                // Determine if max marks input should be read-only (for standard exams)
+                const isMaxMarksReadOnly = ['Mid 1', 'Mid 2', 'End Term'].includes(exam);
+                const maxMarksValue = defaultMax; // Use default based on exam type
+
+                // 3. Build the HTML table rows
+                marksBody.innerHTML = allRollNumbers.map(rollNumber => {
+                    const studentName = studentsMap.get(rollNumber) || `Student ${rollNumber.slice(-3)}`;
+                    const record = marksMap.get(rollNumber.toLowerCase());
+                    // Get marks value, handle null/undefined by showing empty string
+                    const marksValue = (record && record[examTypeDb] !== null && record[examTypeDb] !== undefined) ? record[examTypeDb] : '';
+                    
+                    const readonlyAttr = isMaxMarksReadOnly ? 'readonly class="readonly"' : '';
+
+                    // Create the table row HTML
+                    return `<tr data-roll="${rollNumber.toLowerCase()}" data-name="${studentName}">
+                                <td><span class="roll">${rollNumber.toUpperCase()}</span></td>
+                                <td class="student-name">${studentName}</td>
+                                <td><input type="number" step="0.5" class="max-input" value="${maxMarksValue}" min="1" max="200" ${readonlyAttr}></td>
+                                <td><input type="number" step="0.5" class="marks-input" value="${marksValue}" min="0" max="${maxMarksValue}"></td>
+                            </tr>`;
+                }).join(''); // Join all row strings into one HTML block
+
+                // 4. Add event listeners for validation and Enter key navigation
+                addInputListeners();
+
+                gridSection.style.display = 'block'; // Show the grid section
+                saveStatus.textContent = 'Grid ready. Please enter marks.';
+
+            } catch (error) {
+                console.error('Error in build grid process:', error);
+                saveStatus.textContent = `Error: ${error.message}`;
+                createCustomModal(`Error building grid: ${error.message}`);
+            }
+        }
+        
+        /**
+         * Adds keydown (Enter) and input validation listeners to the grid inputs.
+         */
+        function addInputListeners() {
+            const marksInputs = marksBody.querySelectorAll('.marks-input');
+            
+            marksInputs.forEach((input, index) => {
+                const row = input.closest('tr');
+                const maxInput = row.querySelector('.max-input');
+
+                // Validate marks against max marks on input change
+                input.addEventListener('input', () => {
+                    input.max = maxInput.value; // Ensure max attribute reflects current max value
+                    const marksValue = parseFloat(input.value);
+                    const maxMarksValue = parseFloat(maxInput.value);
+                    
+                    if (!isNaN(marksValue) && !isNaN(maxMarksValue)) { // Only validate if both are numbers
+                        if (marksValue > maxMarksValue) {
+                            input.value = maxMarksValue; // Cap at max marks
+                            saveStatus.textContent = "Marks cannot exceed max marks.";
+                        } else if (marksValue < 0) {
+                             input.value = 0; // Prevent negative marks
+                             saveStatus.textContent = "Marks cannot be negative.";
+                        } else {
+                            saveStatus.textContent = ""; // Clear status if valid
+                        }
+                    } else if (input.value !== '') {
+                        saveStatus.textContent = ""; // Clear status if erasing input
+                    }
+                });
+
+                // Move focus to the next marks input when Enter is pressed
+                input.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault(); // Prevent form submission or newline
+                        const nextInput = marksInputs[index + 1]; // Find the next input in the list
+                        if (nextInput) {
+                            nextInput.focus(); // Move focus
+                            nextInput.select(); // Select text for easy overwriting
+                        } else {
+                            // If it's the last input, just remove focus
+                            input.blur();
+                        }
+                    }
+                });
+            });
+        }
+
+
+        /**
+         * Saves the current grid data (including credits) to the database using upsert.
+         */
+        async function saveMarks() {
+            // Validate that all necessary state variables are set
+            if (!currentSubjectCode || !currentMarksTable || !currentExamType || currentSubjectCredits === null) {
+                createCustomModal("Please select a valid subject (with credits defined in 'courses') first.");
+                return;
+            }
+        
+            const rows = marksBody.querySelectorAll('tr');
+            if (rows.length === 0) return createCustomModal('Nothing to save. Build the grid first.');
+
+            saveBtn.disabled = true; // Disable save button during operation
+            saveStatus.textContent = '⏳ Saving marks...';
+            
+            const examTypeDb = formatExamType(currentExamType); // e.g., 'mid1'
+            const recordsToProcess = []; // Array to hold data objects for each student
+            let errorFound = false; // Flag to stop processing if an error occurs
+            
+            // 1. Collect data from each row in the grid
+            rows.forEach(row => {
+                if (errorFound) return; // Stop if an error was found in a previous row
+                const rollNo = row.dataset.roll;
+                const studentName = row.dataset.name; // Keep for reference, though not saved directly to marks table
+                const maxMarksInput = row.querySelector('.max-input');
+                const marksInput = row.querySelector('.marks-input');
+                
+                const maxMarks = parseFloat(maxMarksInput.value);
+                 // Treat empty input as null, otherwise parse as float
+                const marks = marksInput.value.trim() === '' ? null : parseFloat(marksInput.value);
+
+                // Validation: Check if marks exceed max marks (only if marks is not null)
+                if (marks !== null && !isNaN(marks) && !isNaN(maxMarks) && marks > maxMarks) {
+                    createCustomModal(`Marks for ${rollNo.toUpperCase()} (${marks}) exceed max marks (${maxMarks}). Please correct before saving.`);
+                    errorFound = true;
+                }
+                 // Validation: Check for negative marks (only if marks is not null)
+                else if (marks !== null && !isNaN(marks) && marks < 0) {
+                    createCustomModal(`Marks for ${rollNo.toUpperCase()} (${marks}) cannot be negative. Please correct before saving.`);
+                    errorFound = true;
+                }
+                
+                // Construct the data object for this student, including credits
+                let finalRecord = {
+                    roll_no: rollNo,
+                    subject_code: currentSubjectCode,
+                    credits: currentSubjectCredits, // Include the fetched credits
+                    [examTypeDb]: marks // Save the exam mark (can be null if input was empty)
+                };
+                
+                recordsToProcess.push(finalRecord);
+            });
+
+            // If any validation error occurred, stop the save process
+            if (errorFound) {
+                saveStatus.textContent = '⚠️ Error found in grid. Correct and save again.';
+                saveBtn.disabled = false; // Re-enable save button
+                return;
+            }
+
+            try {
+                // 2. Fetch existing records for merging (necessary for upsert logic)
+                saveStatus.textContent = '⏳ Fetching existing student records...';
+                 const { data: existingData, error: fetchError } = await supabaseClient
+                    .from(currentMarksTable)
+                     // Select all columns needed for merging: id, identifiers, credits, all exam marks
+                    .select('id, roll_no, subject_code, credits, mid1, mid2, endsem') 
+                    .eq('subject_code', currentSubjectCode);
+                    
+                if (fetchError) throw fetchError; // Handle fetch error
+                
+                // Create a map for quick lookup of existing data by roll number
+                const existingDataMap = new Map(existingData.map(d => [d.roll_no.toLowerCase(), d]));
+                const recordsToUpsert = []; // Final array of records for the upsert operation
+                
+                // 3. Merge new marks data with existing data
+                for (const newRecord of recordsToProcess) {
+                    const rollNo = newRecord.roll_no.toLowerCase();
+                    const existing = existingDataMap.get(rollNo); // Find existing record for this student/subject
+                    
+                    if (existing) {
+                        // If record exists, update it: spread existing data, update credits, update current exam mark
+                        recordsToUpsert.push({
+                            ...existing, 
+                            credits: currentSubjectCredits, // Update credits (in case it changed in 'courses')
+                            [examTypeDb]: newRecord[examTypeDb] // Overwrite only the current exam's mark
+                        });
+                    } else {
+                        // If record doesn't exist, create a new one with necessary info
+                        recordsToUpsert.push({
+                            roll_no: rollNo,
+                            subject_code: currentSubjectCode,
+                            credits: currentSubjectCredits, // Set credits for the new record
+                            [examTypeDb]: newRecord[examTypeDb] // Set the current exam's mark
+                            // Other exam columns (mid1, mid2, endsem) will default to null
+                        });
+                    }
+                }
+
+                // 4. Perform the Upsert operation in Supabase
+                saveStatus.textContent = '⏳ Saving all records...';
+                
+                const { error: upsertError } = await supabaseClient
+                    .from(currentMarksTable)
+                    .upsert(recordsToUpsert, {
+                        onConflict: 'roll_no, subject_code' // Specify the columns that define uniqueness
+                    });
+
+                // Handle potential upsert errors
+                if (upsertError) throw upsertError;
+
+                // Success message
+                saveStatus.textContent = '✅ Marks saved successfully!';
+                setTimeout(() => saveStatus.textContent = '', 4000); // Clear status after 4 seconds
+
+            } catch (error) {
+                console.error('Error saving marks:', error);
+                saveStatus.textContent = `⚠️ Error: ${error.message}`;
+                // Specific check for the unique constraint error
+                if (error.message.includes('unique constraint') || error.message.includes('ON CONFLICT')) {
+                     createCustomModal(`Database Error: Could not save marks. The table '${currentMarksTable}' is missing the required unique constraint on (roll_no, subject_code). Please ask your admin to add it.`);
+                } else {
+                     createCustomModal(`Error saving marks: ${error.message}`);
+                }
+            } finally {
+                saveBtn.disabled = false; // Re-enable save button regardless of outcome
+            }
+        }
+
+
+        // --- Initial Setup & Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            teacherNameEl.textContent = `Welcome, ${TEACHER_NAME}`;
+            
+            // Setup listeners for dropdown changes and button clicks
+            semesterSelect.addEventListener('change', onSemesterChange); 
+            subjectSelect.addEventListener('change', handleSubjectChange);
+            examSelect.addEventListener('change', validateInputs);
+            buildGridBtn.addEventListener('click', buildGrid);
+            saveBtn.addEventListener('click', saveMarks); 
+            
+            // Clear button functionality
+            clearGridBtn.addEventListener('click', () => {
+                gridSection.style.display = 'none'; // Hide the grid
+                marksBody.innerHTML = ''; // Clear the table body
+                // Reset dropdowns to default state
+                semesterSelect.value = ''; 
+                subjectSelect.value = '';
+                subjectSelect.innerHTML = '<option value="">— Select Semester First —</option>'; 
+                subjectSelect.disabled = true; 
+                examSelect.value = '';
+                handleSubjectChange(); // Reset related state variables
+                validateInputs(); // Update button states
+            });
+        });
+
+    </script>
+{% endblock %}
+
