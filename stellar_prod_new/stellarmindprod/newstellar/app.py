@@ -35,38 +35,28 @@ def get_supabase_rest_url(table_name):
 
 def determine_student_batch(roll_no):
     """
-    Determines the batch table (b1-b4) based on roll number.
-    This logic now maps semester 1/2 -> b1, 3/4 -> b2, 5/6 -> b3, 7/8 -> b4.
-    We need a way to get semester from roll_no, or we must change this.
-
-    Let's use the old logic from your JS:
-    b25... -> b1 (1st Year)
-    b24... -> b2 (2nd Year)
-    b23... -> b3 (3rd Year)
-    b22... -> b4 (4th Year)
+    Determines the batch table (b1-b4) based on the roll number prefix.
+    This matches the database seeding convention in make_seed.py:
+      b24xxx -> b1 (admitted 2024, default)
+      b23xxx -> b2
+      b22xxx -> b3
+      b21xxx -> b4
+    NOTE: If a student is not found in the expected table, the login code
+    also searches all other batch tables as a fallback.
     """
-    if not roll_no or len(roll_no) < 2:
+    if not roll_no or len(roll_no) < 3 or not roll_no.lower().startswith('b') or not roll_no[1:3].isdigit():
         return None
-    
-    roll_lower = roll_no.lower()
-    
-    if roll_lower.startswith('b25'): # 1st Year
-        return 'b1'
-    if roll_lower.startswith('b24'): # 2nd Year
-        return 'b2'
-    if roll_lower.startswith('b23'): # 3rd Year
-        return 'b3'
-    if roll_lower.startswith('b22'): # 4th Year
-        return 'b4'
-        
-    print(f"Warning: Could not determine batch table for roll_no: {roll_no}")
-    # Fallback for other formats, maybe just check first two chars?
-    if roll_lower.startswith('b1'): return 'b1'
-    if roll_lower.startswith('b2'): return 'b2'
-    if roll_lower.startswith('b3'): return 'b3'
-    if roll_lower.startswith('b4'): return 'b4'
 
-    return None # Return None if no match
+    roll_lower = roll_no.lower()
+    prefix = roll_lower[1:3]  # e.g. '24', '23', '22', '21'
+
+    if prefix == '24': return 'b1'
+    if prefix == '23': return 'b2'
+    if prefix == '22': return 'b3'
+    if prefix == '21': return 'b4'
+
+    print(f"Warning: Roll number prefix 'b{prefix}' does not map to a known batch table.")
+    return None
 
 def get_marks_table_for_student(roll_no):
     """Determines the correct marks table (marks1-marks4) for a student."""
@@ -157,27 +147,39 @@ def fetch_and_verify_user(username, password):
     # Assume username could be roll_no (student), username (teacher/admin), or email (parent/student)
     username_lower = username.lower() 
 
-    # 1. Try Student Tables (by roll_no)
+    # 1. Try Student Tables (by roll_no) — primary table first, then all others as fallback
     batch_table = determine_student_batch(username_lower)
-    if batch_table:
+    tables_to_search = [batch_table] if batch_table else []
+    # Add remaining batch tables as fallback (avoids duplicating primary table)
+    for t in STUDENT_TABLES:
+        if t not in tables_to_search:
+            tables_to_search.append(t)
+
+    for tbl in tables_to_search:
         try:
-            url = get_supabase_rest_url(batch_table)
+            url = get_supabase_rest_url(tbl)
             params = {'select': '*,student_password', 'roll_no': f'eq.{username_lower}'}
             response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
-            if data and len(data) == 1:
+            if data and len(data) >= 1:
                 user_data = data[0]
                 # Check password
                 if check_password_hash(user_data.get('student_password', ''), password):
-                    user_data.pop('student_password', None) # Remove hash from session data
+                    user_data.pop('student_password', None)  # Remove hash from session data
                     user_data.pop('parent_password', None)
                     user_data['role'] = 'student'
-                    user_data['batch'] = batch_table 
-                    user_data['roll_no'] = user_data.get('roll_no', username_lower) # Ensure roll_no is set
+                    user_data['batch'] = tbl
+                    user_data['roll_no'] = user_data.get('roll_no', username_lower)
                     return user_data
+                else:
+                    # Found the user but wrong password — stop searching other batch tables
+                    if data:
+                        print(f"Student {username_lower} found in {tbl} but password mismatch.")
+                        break
         except Exception as e:
-            print(f"Error querying {batch_table} by roll_no: {e}")
+            print(f"Error querying {tbl} by roll_no: {e}")
+
 
     # 2. Try Teacher Table (by username)
     try:
@@ -818,8 +820,41 @@ def admin_mark_attendance_page():
 @app.route("/admin/marks")
 @login_required(role='admin')
 def admin_enter_marks_page():
-     flash("Admin marks management not yet implemented.", "info")
-     return redirect(url_for('index'))
+    user = session.get('user')
+    all_courses = []
+    all_teachers = []
+    
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        params = {'select': 'course_code,course_name,semester,credits,assisting_teacher', 'order': 'semester.asc,course_name.asc'} 
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        all_courses = response.json()
+        
+        all_teachers = fetch_all_teachers()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching all courses/teachers for admin: {e}")
+        flash("Error loading data.", "danger")
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        flash("Server configuration error trying to access courses.", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    return render_template(
+        "admin_marks.html",
+        user=user,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY,
+        all_courses_json=json.dumps(all_courses),
+        all_teachers_json=json.dumps(all_teachers),
+        marks_tables_json=json.dumps(MARKS_TABLES) 
+    )
+
+@app.route("/admin/events")
+@login_required(role='admin')
+def manage_events_page():
+     return render_template("manage_events.html")
 
 @app.route("/admin/dashboard")
 @login_required(role='admin')
@@ -1459,11 +1494,6 @@ def delete_timetable_entry(entry_id):
 
     return redirect(url_for('manage_timetable_page', semester=semester))
 
-@app.route("/admin/events")
-@login_required(role='admin')
-def manage_events_page():
-     flash("Event management not yet implemented.", "info")
-     return redirect(url_for('index'))
 
 
 # --- START: NOTIFICATION ROUTES ---

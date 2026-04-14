@@ -47,16 +47,6 @@
     <h1>Create Account</h1>
     <p class="subtitle">Join the StellarMind Prod community.</p>
 
-     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="flash-messages" style="margin-bottom: 1rem;"> {# Add margin-bottom #}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
-            {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-
     <form method="POST" action="{{ url_for('signup_page') }}">
         <div class="input-group">
              <input type="text" id="roll_no" name="roll_no" placeholder="Roll Number (e.g., b240001)" required pattern="^[bB][1-4]\d{5}$" title="Roll number must start with b1-b4 followed by 5 digits (e.g., b240001)">
@@ -91,6 +81,16 @@
          <div class="input-group">
              <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required minlength="8">
             <i class="fas fa-check-circle"></i>
+        </div>
+        
+        <!-- Parent Details -->
+        <div class="input-group">
+             <input type="email" id="parent_email" name="parent_email" placeholder="Parent Email" required>
+            <i class="fas fa-user-tie"></i>
+        </div>
+         <div class="input-group">
+             <input type="password" id="parent_password" name="parent_password" placeholder="Parent Password (min 8 characters)" required minlength="8">
+            <i class="fas fa-key"></i>
         </div>
         <button type="submit" class="btn-signup">Sign Up</button>
     </form>

@@ -227,29 +227,18 @@
     <h1><i class="fa-solid fa-user-secret"></i> Welcome Back</h1>
     <p class="subtitle">Login to explore your Stellar Mind</p>
 
-    <!-- Display Flash Messages (moved inside container) -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="flash-messages">
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
-            {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-
     <!-- Updated form to submit to Flask backend -->
-    <form method="POST" action="{{ url_for('login_page') }}">
-        <div classs="input-group">
+    <form method="POST" action="{{ url_for('login_page') }}" autocomplete="off">
+        <div class="input-group">
             <i class="fas fa-user"></i>
             <!-- Added 'name' attribute for Flask -->
-            <input type="text" id="username" name="username" placeholder="Roll No / Email / Username" required>
+            <input type="text" id="username" name="username" placeholder="Roll No / Email / Username" autocomplete="username" spellcheck="false" required>
         </div>
 
         <div class="input-group">
             <i class="fas fa-lock"></i>
             <!-- Added 'name' attribute for Flask -->
-            <input type="password" id="password" name="password" placeholder="Password" required>
+            <input type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" required>
         </div>
         
         <p class="forgot-password-link">
@@ -293,4 +282,3 @@
         }
     </script>
 {% endblock %}
-```
