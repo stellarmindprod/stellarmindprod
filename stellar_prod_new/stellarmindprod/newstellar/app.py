@@ -12,7 +12,8 @@ from functools import wraps
 from config import (
     SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
     MARKS_TABLES, SECRET_KEY, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE,TIMETABLE_TABLE
+    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE,TIMETABLE_TABLE,
+    NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE
 )
 
 # Initialize Flask App
@@ -26,7 +27,7 @@ def get_supabase_rest_url(table_name):
     # Basic validation to prevent unintended table access
     allowed_tables = STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
         TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-        COURSE_TABLE, TIMETABLE_TABLE # Added COURSE_TABLE
+        COURSE_TABLE, TIMETABLE_TABLE, NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE
     ] # Add other valid tables
     if table_name not in allowed_tables:
          raise ValueError(f"Access to table '{table_name}' is not permitted.")
@@ -444,6 +445,7 @@ def signup_page():
     if request.method == "POST":
         roll_no = request.form.get("roll_no", "").strip().lower()
         student_name = request.form.get("student_name", "").strip()
+        department = request.form.get("department", "").strip()
         student_email = request.form.get("student_email", "").strip().lower()
         password = request.form.get("student_password", "").strip()
         confirm_password = request.form.get("confirm_password", "").strip()
@@ -453,8 +455,8 @@ def signup_page():
         parent_password = request.form.get("parent_password", "").strip()
         
         # Basic validation
-        if not all([roll_no, student_name, student_email, password, confirm_password, parent_email, parent_password]):
-            flash("All fields (including parent details) are required.", "danger")
+        if not all([roll_no, student_name, student_email, password, confirm_password, parent_email, parent_password, department]):
+            flash("All fields (including parent details and department) are required.", "danger")
             return render_template("signup.html")
         if password != confirm_password:
             flash("Student passwords do not match.", "danger")
@@ -510,6 +512,7 @@ def signup_page():
         new_student_data = {
             "roll_no": roll_no,
             "student_name": student_name,
+            "department": department,
             "student_email": student_email,
             "student_password": hashed_student_password, # Store the HASH
             "parent_email": parent_email,
@@ -1462,6 +1465,137 @@ def manage_events_page():
      flash("Event management not yet implemented.", "info")
      return redirect(url_for('index'))
 
+
+# --- START: NOTIFICATION ROUTES ---
+
+@app.route("/api/notifications", methods=["GET"])
+@login_required()
+def get_notifications():
+    """Fetches notifications for the logged-in user and calculates unread count."""
+    user = session.get('user')
+    role = user.get('role')
+    
+    if role not in ['student', 'teacher', 'admin']:
+        return jsonify({'notifications': [], 'unread_count': 0})
+        
+    try:
+        # Get all notifications (we'll filter in Python for simplicity, though DB filtering is better for large datasets)
+        url_notif = get_supabase_rest_url(NOTIFICATIONS_TABLE)
+        # Order by created_at descending
+        params_notif = {'select': '*', 'order': 'created_at.desc'}
+        resp_notif = requests.get(url_notif, headers=SUPABASE_HEADERS, params=params_notif, timeout=5)
+        resp_notif.raise_for_status()
+        all_notifications = resp_notif.json()
+        
+        # Get reads for this specific user
+        user_id_for_reads = user.get('roll_no') if role == 'student' else user.get('username')
+        
+        url_reads = get_supabase_rest_url(NOTIFICATION_READS_TABLE)
+        params_reads = {'select': 'notification_id', 'roll_no': f'eq.{user_id_for_reads}'}
+        resp_reads = requests.get(url_reads, headers=SUPABASE_HEADERS, params=params_reads, timeout=5)
+        resp_reads.raise_for_status()
+        read_notifications = {item['notification_id'] for item in resp_reads.json()}
+        
+        filtered_notifications = []
+        unread_count = 0
+        
+        for notif in all_notifications:
+            # Check if notification applies to user
+            applies = False
+            if role in ['admin', 'teacher']:
+                # Teachers/admins see their own sent messages or ALL
+                if notif.get('sender_username') == user.get('username'):
+                    applies = True
+            elif role == 'student':
+                batch_match = notif.get('target_batch') == 'ALL' or notif.get('target_batch') == user.get('batch')
+                dept_match = notif.get('target_department') == 'ALL' or notif.get('target_department') == user.get('department')
+                if batch_match and dept_match:
+                    applies = True
+                    
+            if applies:
+                is_read = notif['id'] in read_notifications
+                notif['is_read'] = is_read
+                if not is_read:
+                    unread_count += 1
+                filtered_notifications.append(notif)
+                
+        return jsonify({'notifications': filtered_notifications, 'unread_count': unread_count})
+
+    except Exception as e:
+        print(f"Error fetching notifications: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/notifications/read", methods=["POST"])
+@login_required()
+def mark_notification_read():
+    """Marks a notification as read by the user."""
+    data = request.json
+    notification_id = data.get('notification_id')
+    user = session.get('user')
+    user_id_for_reads = user.get('roll_no') if user.get('role') == 'student' else user.get('username')
+    
+    if not notification_id or not user_id_for_reads:
+        return jsonify({'success': False}), 400
+        
+    try:
+        url = get_supabase_rest_url(NOTIFICATION_READS_TABLE)
+        # Attempt to insert, ignore if already exists (depends on DB constraints, but we have UNIQUE on notification_id + roll_no)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal'
+        payload = {
+            'notification_id': notification_id,
+            'roll_no': user_id_for_reads
+        }
+        res = requests.post(url, headers=headers, json=payload, timeout=5)
+        # 409 means it already exists, which is fine (already read)
+        if res.status_code not in [201, 409]:
+            res.raise_for_status()
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error marking notification read: {e}")
+        return jsonify({'success': False}), 500
+
+
+@app.route("/teacher/notifications/send", methods=["GET", "POST"])
+@login_required(role=['teacher', 'admin'])
+def send_notification_page():
+    """Renders page and handles POST to send a new notification."""
+    if request.method == "POST":
+        target_batch = request.form.get("target_batch", "ALL")
+        target_department = request.form.get("target_department", "ALL")
+        message = request.form.get("message", "").strip()
+        user = session.get('user')
+        
+        if not message:
+            flash("Message cannot be empty.", "danger")
+            return redirect(url_for('send_notification_page'))
+            
+        payload = {
+            "sender_username": user.get('username'),
+            "sender_name": user.get('teacher_name') or user.get('name') or user.get('username'),
+            "message": message,
+            "target_batch": target_batch,
+            "target_department": target_department
+        }
+        
+        try:
+            url = get_supabase_rest_url(NOTIFICATIONS_TABLE)
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+            res = requests.post(url, headers=headers, json=payload, timeout=5)
+            res.raise_for_status()
+            flash("Notification sent successfully!", "success")
+        except Exception as e:
+            print(f"Error sending notification: {e}")
+            flash("Error sending notification.", "danger")
+            
+        return redirect(url_for('send_notification_page'))
+        
+    return render_template("send_notification.html")
+
+# --- END: NOTIFICATION ROUTES ---
 
 # --- Error Handling ---
 @app.errorhandler(404)

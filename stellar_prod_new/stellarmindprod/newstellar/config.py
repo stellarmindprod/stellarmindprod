@@ -26,6 +26,10 @@ EVENTS_TABLE = "events"
 HOLIDAYS_TABLE = "holidays"
 TIMETABLE_TABLE = "timetables"
 
+# --- Notifications Tables ---
+NOTIFICATIONS_TABLE = "notifications"
+NOTIFICATION_READS_TABLE = "notification_reads"
+
 # --- Headers for Supabase REST API calls ---
 # Using Anon key - ensure RLS is properly configured if using this.
 SUPABASE_HEADERS = {
