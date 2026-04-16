@@ -1,0 +1,131 @@
+{% extends "layout.html" %}
+
+{% block title %}Sign Up{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .signup-container {
+            max-width: 450px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+         .signup-container .icon {
+             font-size: 2.5rem;
+             color: #198754; /* Bootstrap success */
+             margin-bottom: 1rem;
+         }
+         .signup-container h1 { font-size: 1.8rem; margin-bottom: 0.75rem; color: #212529; }
+         .signup-container p.subtitle { color: #6c757d; margin-bottom: 1.5rem; }
+        .input-group { margin-bottom: 1rem; position: relative; text-align: left; } /* Reduced bottom margin */
+        .input-group i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #adb5bd; }
+        .input-group input, .input-group select { width: 100%; padding: 12px 12px 12px 40px; border: 1px solid #ced4da; border-radius: 8px; font-size: 1rem; box-sizing: border-box; background-color: #fff; appearance: none; /* Reset default styles */ }
+         .input-group select { padding-left: 12px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 16px 12px; } /* Custom dropdown arrow */
+         .input-group input:focus, .input-group select:focus { border-color: #86b7fe; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); outline: none; }
+         .input-group label { /* Optional: Style labels if you add them */
+            display: block;
+            margin-bottom: 0.3rem;
+            font-size: 0.9rem;
+            color: #495057;
+            font-weight: 500;
+         }
+        .btn-signup { width: 100%; padding: 12px; background-color: #198754; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.3s ease; font-weight: 600; margin-top: 1rem; } /* Added margin-top */
+        .btn-signup:hover { background-color: #157347; }
+        .login-link { margin-top: 1.5rem; font-size: 0.9rem; color: #6c757d;}
+        .login-link a { color: #0d6efd; text-decoration: none; font-weight: 600; }
+        .login-link a:hover { text-decoration: underline; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="signup-container">
+    <div class="icon"><i class="fas fa-user-plus"></i></div>
+    <h1>Create Account</h1>
+    <p class="subtitle">Join the StellarMind Prod community.</p>
+
+     {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages" style="margin-bottom: 1rem;"> {# Add margin-bottom #}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('signup_page') }}">
+        <div class="input-group">
+             <input type="text" id="roll_no" name="roll_no" placeholder="Roll Number (e.g., b240001)" required pattern="^[bB][1-4]\d{5}$" title="Roll number must start with b1-b4 followed by 5 digits (e.g., b240001)">
+            <i class="fas fa-id-card"></i>
+        </div>
+         <div class="input-group">
+             <input type="text" id="student_name" name="student_name" placeholder="Full Name" required>
+            <i class="fas fa-user"></i>
+        </div>
+        <div class="input-group">
+             <input type="email" id="student_email" name="student_email" placeholder="Institute Email (e.g., b240001@nitsikkim.ac.in)" required pattern="^[bB][1-4]\d{5}@nitsikkim\.ac\.in$" title="Must be a valid @nitsikkim.ac.in email matching your roll number">
+            <i class="fas fa-envelope"></i>
+        </div>
+         <div class="input-group">
+             <input type="password" id="student_password" name="student_password" placeholder="Password (min 8 characters)" required minlength="8">
+            <i class="fas fa-lock"></i>
+        </div>
+         <div class="input-group">
+             <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required minlength="8">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <button type="submit" class="btn-signup">Sign Up</button>
+    </form>
+     <p class="login-link">Already have an account? <a href="{{ url_for('login_page') }}">Login</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        // Optional: Add JS for client-side password match validation
+        const password = document.getElementById("student_password");
+        const confirm_password = document.getElementById("confirm_password");
+
+        function validatePassword(){
+          if(password.value != confirm_password.value) {
+            confirm_password.setCustomValidity("Passwords Don't Match");
+          } else {
+            confirm_password.setCustomValidity('');
+          }
+        }
+
+        if (password && confirm_password) {
+            password.onchange = validatePassword;
+            confirm_password.onkeyup = validatePassword;
+        }
+
+        // Optional: Validate email matches roll number pattern on input
+        const rollNoInput = document.getElementById("roll_no");
+        const emailInput = document.getElementById("student_email");
+
+        function validateEmailRollMatch() {
+            if (rollNoInput && emailInput && rollNoInput.value && emailInput.value) {
+                 const expectedEmailStart = rollNoInput.value.toLowerCase();
+                 // Ensure the pattern check is robust
+                 const emailPattern = new RegExp(`^${expectedEmailStart}@nitsikkim\\.ac\\.in$`, 'i');
+                 if (!emailPattern.test(emailInput.value)) {
+                     emailInput.setCustomValidity("Email must match your Roll Number (e.g., " + expectedEmailStart + "@nitsikkim.ac.in)");
+                 } else {
+                     emailInput.setCustomValidity('');
+                 }
+            } else if (emailInput) {
+                 emailInput.setCustomValidity(''); // Clear error if roll no is empty
+            }
+        }
+         if (rollNoInput && emailInput) {
+             rollNoInput.addEventListener('input', validateEmailRollMatch);
+             emailInput.addEventListener('input', validateEmailRollMatch);
+         }
+
+    </script>
+{% endblock %}
