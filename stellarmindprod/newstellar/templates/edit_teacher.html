@@ -1,0 +1,116 @@
+{% extends "layout.html" %}
+
+{% block title %}Edit Teacher - {{ teacher.username }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        /* Re-using styles from manage_courses/manage_teacher */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-end: #0087c5;
+            --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .content-card {
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow-base);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            max-width: 800px; /* Center the form a bit */
+            margin: 2rem auto;
+        }
+        .content-card h2 {
+            color: var(--accent-end);
+            margin-top: 0;
+            border-bottom: 2px solid var(--primary-bg);
+            padding-bottom: 0.5rem;
+        }
+        .teacher-form { /* Renamed from course-form */
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--subtle-text);
+        }
+        .form-group input {
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        .form-group input:read-only {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
+        .btn-submit {
+            grid-column: 1 / -1;
+            background-color: var(--accent-end);
+        }
+        .btn-submit:hover {
+            background-color: #0070a9;
+        }
+        .btn-cancel {
+            grid-column: 1 / -1;
+            background-color: #6c757d;
+            text-align: center;
+        }
+        .btn-cancel:hover {
+            background-color: #5a6268;
+        }
+
+        @media (max-width: 600px) {
+            .teacher-form { /* Renamed from course-form */
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <h2>Edit Teacher: {{ teacher.teacher_name }} ({{ teacher.username }})</h2>
+    
+    <form action="{{ url_for('update_teacher') }}" method="POST" class="teacher-form">
+        
+        <!-- Hidden input to send the teacher_id back to the server -->
+        <input type="hidden" name="teacher_id" value="{{ teacher.teacher_id }}">
+        
+        <div class="form-group">
+            <label for="username_display">Username</label>
+            <!-- Username is typically not editable, display as read-only -->
+            <input type="text" id="username_display" value="{{ teacher.username }}" readonly>
+        </div>
+        <div class="form-group">
+            <label for="teacher_name">Full Name</label>
+            <input type="text" id="teacher_name" name="teacher_name" value="{{ teacher.teacher_name }}" required>
+        </div>
+        <div class="form-group">
+            <label for="department">Department</label>
+            <input type="text" id="department" name="department" value="{{ teacher.department or '' }}">
+        </div>
+        <div class="form-group">
+            <label for="teacher_email">Email</label>
+            <input type="email" id="teacher_email" name="teacher_email" value="{{ teacher.teacher_email }}" required>
+        </div>
+        
+        <!-- Password field intentionally removed as requested -->
+
+        <button type="submit" class="btn btn-submit">Update Teacher</button>
+        <!-- Link back to the main teacher management page -->
+        <a href="{{ url_for('manage_teachers_page') }}" class="btn btn-cancel">Cancel</a>
+    </form>
+</div>
+{% endblock %}
+
