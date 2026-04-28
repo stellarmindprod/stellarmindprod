@@ -12,6 +12,8 @@ SUPABASE_SERVICE_KEY = "sb_secret_Ws613bJqEKwJWs_EO2vPmg_vlHTpEIQ" # Keep this s
 
 # --- Database Table Names (Based on your provided SQL) ---
 STUDENT_TABLES = ["b1", "b2", "b3", "b4"]
+ALUMNI_TABLE = "alumni"
+ALL_STUDENT_TABLES = ["b1", "b2", "b3", "b4", "alumni"]  # Includes alumni for login search
 TEACHER_TABLE = "teachers"
 ADMIN_TABLE = "admin" # Assumed table name for administrators
 COURSE_TABLE = "courses"
@@ -25,6 +27,10 @@ ATTENDANCE_TABLE = "attendance" # General/old table, keep for reference or other
 EVENTS_TABLE = "events"
 HOLIDAYS_TABLE = "holidays"
 TIMETABLE_TABLE = "timetables"
+
+# --- Batch Promotion Tables ---
+PROMOTION_LOG_TABLE = "promotion_log"
+YEAR_BACK_TABLE = "year_back_students"
 
 # --- Notifications Tables ---
 NOTIFICATIONS_TABLE = "notifications"

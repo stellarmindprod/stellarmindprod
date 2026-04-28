@@ -10,10 +10,12 @@ from functools import wraps
 
 # Import configuration variables
 from config import (
-    SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
+    SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, ALL_STUDENT_TABLES,
+    TEACHER_TABLE, ADMIN_TABLE,
     MARKS_TABLES, SECRET_KEY, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE,TIMETABLE_TABLE,
-    NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE
+    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE, TIMETABLE_TABLE,
+    NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE,
+    ALUMNI_TABLE, PROMOTION_LOG_TABLE, YEAR_BACK_TABLE, BACKLOG_TABLE
 )
 
 # Initialize Flask App
@@ -25,9 +27,10 @@ app.config['SECRET_KEY'] = SECRET_KEY
 def get_supabase_rest_url(table_name):
     """Constructs the Supabase REST API URL for a table."""
     # Basic validation to prevent unintended table access
-    allowed_tables = STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
+    allowed_tables = ALL_STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
         TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-        COURSE_TABLE, TIMETABLE_TABLE, NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE
+        COURSE_TABLE, TIMETABLE_TABLE, NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE,
+        PROMOTION_LOG_TABLE, YEAR_BACK_TABLE, BACKLOG_TABLE
     ] # Add other valid tables
     if table_name not in allowed_tables:
          raise ValueError(f"Access to table '{table_name}' is not permitted.")
@@ -117,7 +120,11 @@ def get_current_semester(student_batch, current_month):
 # --- Context Processor ---
 @app.context_processor
 def inject_now():
-    return {'now': datetime.datetime.utcnow()}
+    return {
+        'now': datetime.datetime.utcnow(),
+        'STUDENT_TABLES': STUDENT_TABLES,
+        'ALL_STUDENT_TABLES': ALL_STUDENT_TABLES
+    }
 
 # --- Authentication Decorators ---
 
@@ -375,7 +382,9 @@ def index():
         events=events_data, 
         holidays=holidays_data, 
         daily_schedule=daily_schedule, 
-        today_is_holiday=today_is_holiday
+        today_is_holiday=today_is_holiday,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
     )
 
 
@@ -615,17 +624,45 @@ def student_marks_page():
         flash("Could not identify student roll number.", "danger")
         return redirect(url_for('index'))
 
-    # Use the existing helper function to get the correct marks table
-    marks_table = get_marks_table_for_student(roll_no) 
+    # Fetch announcement status for the student's batch
+    batch = user.get('batch')
+    announcement_status = {}
+    
+    if batch == 'alumni':
+        # Alumni can always see all their historical results
+        announcement_status = {
+            'mid1_announced': True, 
+            'mid2_announced': True, 
+            'endsem_announced': True
+        }
+    elif batch:
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+            params = {'batch': f'eq.{batch}'}
+            resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            if resp.ok and resp.json():
+                announcement_status = resp.json()[0]
+        except Exception as e:
+            print(f"Error fetching announcements: {e}")
 
-    if not marks_table:
-        flash("Could not determine marks records for your batch.", "warning")
-        return redirect(url_for('index'))
+    # Fetch Grades History
+    grades_data = {}
+    try:
+        url_grades = f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}"
+        params_grades = {'roll_no': f'eq.{roll_no}'}
+        resp_grades = requests.get(url_grades, headers=SUPABASE_HEADERS, params=params_grades, timeout=10)
+        if resp_grades.ok and resp_grades.json():
+            grades_data = resp_grades.json()[0]
+    except Exception as e:
+        print(f"Error fetching grades: {e}")
 
+    # MODIFICATION: Pass ALL marks tables, announcement status, and grades data to the template
     return render_template(
-        "marks.html", # Render the new marks.html template
+        "marks.html", 
         user=user, 
-        marks_table=marks_table, # Pass the correct marks table name
+        marks_tables=MARKS_TABLES, 
+        announcement_status=announcement_status,
+        grades_data=grades_data, # Pass this!
         supabase_url=SUPABASE_URL,
         supabase_key=SUPABASE_ANON_KEY
     )
@@ -1625,7 +1662,511 @@ def send_notification_page():
         
     return render_template("send_notification.html")
 
-# --- END: NOTIFICATION ROUTES ---
+# --- START: BATCH PROMOTION & BACKLOG ROUTES ---
+
+@app.route("/admin/batch-promotion")
+@login_required(role='admin')
+def admin_batch_promotion_page():
+    """Renders the batch promotion management page."""
+    user = session.get('user')
+    
+    batch_counts = {}
+    year_back_students = []
+    active_backlogs = []
+    promotion_logs = []
+    announcements = []
+    
+    try:
+        # Fetch Result Announcements
+        url_ann = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        resp_ann = requests.get(url_ann, headers=SUPABASE_HEADERS, timeout=10)
+        if resp_ann.ok:
+            announcements = resp_ann.json()
+
+        # Fetch counts
+        for batch in ALL_STUDENT_TABLES:
+            url = get_supabase_rest_url(batch)
+            params = {'select': 'roll_no'} 
+            response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            if response.ok:
+                batch_counts[batch] = len(response.json())
+            else:
+                batch_counts[batch] = 0
+
+        # Fetch Year-Back Students
+        url_yb = get_supabase_rest_url(YEAR_BACK_TABLE)
+        response_yb = requests.get(url_yb, headers=SUPABASE_HEADERS, timeout=10)
+        if response_yb.ok:
+            year_back_students = response_yb.json()
+
+        # Fetch Active Backlogs
+        url_bl = get_supabase_rest_url(BACKLOG_TABLE)
+        params_bl = {'status': 'eq.active'}
+        response_bl = requests.get(url_bl, headers=SUPABASE_HEADERS, params=params_bl, timeout=10)
+        if response_bl.ok:
+            active_backlogs = response_bl.json()
+
+        # Fetch Promotion Logs
+        url_pl = get_supabase_rest_url(PROMOTION_LOG_TABLE)
+        params_pl = {'order': 'promoted_at.desc'}
+        response_pl = requests.get(url_pl, headers=SUPABASE_HEADERS, params=params_pl, timeout=10)
+        if response_pl.ok:
+            promotion_logs = response_pl.json()
+
+    except Exception as e:
+        print(f"Error loading batch promotion data: {e}")
+        flash("Some data could not be loaded.", "warning")
+
+    return render_template(
+        "batch_promotion.html",
+        user=user,
+        batch_counts=batch_counts,
+        year_back_students=year_back_students,
+        active_backlogs=active_backlogs,
+        promotion_logs=promotion_logs,
+        announcements=announcements, # Added this
+        STUDENT_TABLES=STUDENT_TABLES
+    )
+
+@app.route("/admin/batch-promotion/promote", methods=["POST"])
+@login_required(role='admin')
+def promote_batches():
+    """Handles the heavy lifting of promoting students across batches."""
+    admin_user = session.get('user')
+    promoted_by = admin_user.get('username')
+    
+    results = {
+        'to_alumni': 0,
+        'promoted': 0,
+        'year_back_skipped': 0
+    }
+    
+    try:
+        # 1. Get all year-back roll numbers to exclude
+        url_yb = get_supabase_rest_url(YEAR_BACK_TABLE)
+        resp_yb = requests.get(url_yb, headers=SUPABASE_HEADERS, timeout=10)
+        year_back_rolls = [s['roll_no'] for s in resp_yb.json()] if resp_yb.ok else []
+        results['year_back_skipped'] = len(year_back_rolls)
+
+        # Helper to move students
+        def move_students(from_table, to_table):
+            url_from = get_supabase_rest_url(from_table)
+            resp_from = requests.get(url_from, headers=SUPABASE_HEADERS, timeout=30)
+            if not resp_from.ok: return 0
+            
+            students = resp_from.json()
+            to_move = [s for s in students if s['roll_no'] not in year_back_rolls]
+            
+            if not to_move: return 0
+            
+            # Insert into to_table
+            url_to = get_supabase_rest_url(to_table)
+            students_payload = []
+            for s in to_move:
+                # Create a copy and remove ID
+                sc = s.copy()
+                sc.pop('id', None)
+                students_payload.append(sc)
+            
+            resp_to = requests.post(url_to, headers=SUPABASE_HEADERS, json=students_payload, timeout=30)
+            if not resp_to.ok:
+                print(f"Error moving to {to_table}: {resp_to.text}")
+                raise Exception(f"Failed to insert into {to_table}")
+            
+            # Delete from from_table
+            for s in to_move:
+                delete_params = {'roll_no': f"eq.{s['roll_no']}"}
+                requests.delete(url_from, headers=SUPABASE_HEADERS, params=delete_params, timeout=10)
+            
+            return len(to_move)
+
+        # Execute in sequence (Reverse order)
+        # 1. b4 -> alumni
+        results['to_alumni'] = move_students('b4', 'alumni')
+        # 2. b3 -> b4
+        results['promoted'] += move_students('b3', 'b4')
+        # 3. b2 -> b3
+        results['promoted'] += move_students('b2', 'b3')
+        # 4. b1 -> b2
+        results['promoted'] += move_students('b1', 'b2')
+
+        # 5. Reset Result Announcements for all promoted batches
+        url_ann = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        reset_payload = {
+            'mid1_announced': False,
+            'mid2_announced': False,
+            'endsem_announced': False,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        # Reset all announcement toggles
+        requests.patch(url_ann, headers=SUPABASE_HEADERS, json=reset_payload, timeout=10)
+
+        # 6. CLEAR MARKS TABLES (Clean Slate for new academic year)
+        # We clear the marks table that the batch just finished using.
+        for i in range(1, 5):
+            m_table = f"marks{i}"
+            requests.delete(f"{SUPABASE_URL}/rest/v1/{m_table}", headers=SUPABASE_HEADERS, params={'roll_no': 'neq.0'}, timeout=10)
+
+        # 7. Log the event
+        url_log = get_supabase_rest_url(PROMOTION_LOG_TABLE)
+        log_entry = {
+            'promoted_by': promoted_by,
+            'students_promoted': results['promoted'],
+            'students_to_alumni': results['to_alumni'],
+            'year_back_excluded': len(year_back_rolls),
+            'notes': f"Batch promotion executed on {datetime.datetime.now().strftime('%Y-%m-%d')}"
+        }
+        requests.post(url_log, headers=SUPABASE_HEADERS, json=log_entry)
+
+        flash(f"Promotion successful! {results['promoted']} students promoted, {results['to_alumni']} moved to alumni.", "success")
+
+    except Exception as e:
+        print(f"Promotion Error: {e}")
+        flash(f"Error during promotion: {str(e)}", "danger")
+
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/year-back/add", methods=["POST"])
+@login_required(role='admin')
+def add_year_back():
+    roll_no = request.form.get('roll_no', '').strip().lower()
+    student_name = request.form.get('student_name', '').strip()
+    current_batch = request.form.get('current_batch', '').strip()
+    reason = request.form.get('reason', '').strip()
+    
+    if not roll_no or not current_batch:
+        flash("Roll number and current batch are required.", "danger")
+        return redirect(url_for('admin_batch_promotion_page'))
+        
+    try:
+        url = get_supabase_rest_url(YEAR_BACK_TABLE)
+        payload = {
+            'roll_no': roll_no,
+            'student_name': student_name,
+            'current_batch': current_batch,
+            'reason': reason
+        }
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash(f"Student {roll_no} added to year-back list.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/year-back/remove/<int:id>", methods=["POST"])
+@login_required(role='admin')
+def remove_year_back(id):
+    try:
+        url = get_supabase_rest_url(YEAR_BACK_TABLE)
+        params = {'id': f'eq.{id}'}
+        resp = requests.delete(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        resp.raise_for_status()
+        flash("Student removed from year-back list.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/backlogs/add", methods=["POST"])
+@login_required(role='admin')
+def add_backlog():
+    roll_no = request.form.get('roll_no', '').strip().lower()
+    subject_code = request.form.get('subject_code', '').strip().upper()
+    subject_name = request.form.get('subject_name', '').strip()
+    semester = request.form.get('semester')
+    batch = request.form.get('batch', '').strip()
+    
+    if not all([roll_no, subject_code, semester]):
+        flash("Roll no, subject code, and semester are required.", "danger")
+        return redirect(url_for('admin_batch_promotion_page'))
+        
+    try:
+        url = get_supabase_rest_url(BACKLOG_TABLE)
+        payload = {
+            'roll_no': roll_no,
+            'subject_code': subject_code,
+            'subject_name': subject_name,
+            'semester': int(semester),
+            'batch_when_failed': batch,
+            'status': 'active'
+        }
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash(f"Backlog added for {roll_no}.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/backlogs/clear/<int:id>", methods=["POST"])
+@login_required(role='admin')
+def clear_backlog(id):
+    try:
+        url = get_supabase_rest_url(BACKLOG_TABLE)
+        params = {'id': f'eq.{id}'}
+        payload = {
+            'status': 'cleared',
+            'cleared_date': datetime.datetime.now().isoformat()
+        }
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash("Backlog marked as cleared.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/reset-test-data", methods=["POST"])
+@login_required(role='admin')
+def reset_test_data():
+    """Testing utility: Moves all students from B2, B3, B4 back to B1."""
+    try:
+        all_moved = 0
+        # 1. Fetch from B2, B3, B4
+        for source_batch in ["b2", "b3", "b4"]:
+            url_source = get_supabase_rest_url(source_batch)
+            resp = requests.get(url_source, headers=SUPABASE_HEADERS, timeout=10)
+            if not resp.ok: continue
+            
+            students = resp.json()
+            if not students: continue
+            
+            # 2. Push to B1
+            url_target = get_supabase_rest_url("b1")
+            for std in students:
+                # Remove ID to allow new primary key generation if necessary, or keep if roll_no is unique
+                # Actually, Supabase identity columns handle this.
+                std.pop('id', None) 
+                requests.post(url_target, headers=SUPABASE_HEADERS, json=std, timeout=10)
+                all_moved += 1
+            
+            # 3. Clear source table
+            requests.delete(url_source, headers=SUPABASE_HEADERS, params={'roll_no': 'neq.0'}, timeout=10)
+
+        flash(f"Test Reset Complete: {all_moved} students moved back to B1.", "success")
+    except Exception as e:
+        flash(f"Reset Error: {str(e)}", "danger")
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/result-management")
+@login_required(role='admin')
+def admin_result_management_page():
+    """Renders the dedicated result announcement management page."""
+    user = session.get('user')
+    announcements = []
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        resp = requests.get(url, headers=SUPABASE_HEADERS, timeout=10)
+        if resp.ok:
+            announcements = resp.json()
+    except Exception as e:
+        print(f"Error fetching announcements: {e}")
+        
+    return render_template("result_management.html", user=user, announcements=announcements)
+
+@app.route("/admin/announce-result", methods=["POST"])
+@login_required(role='admin')
+def announce_result():
+    batch = request.form.get('batch')
+    exam_type = request.form.get('exam_type') # mid1, mid2, endsem
+    status = request.form.get('status') == 'true'
+    
+    if not batch or not exam_type:
+        flash("Invalid announcement request.", "danger")
+        return redirect(url_for('admin_result_management_page'))
+        
+    try:
+        # Check sequence
+        url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        params = {'batch': f'eq.{batch}'}
+        curr_resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        curr = curr_resp.json()[0] if curr_resp.ok and curr_resp.json() else {}
+        
+        if status: # Turning ON
+            if exam_type == 'mid2' and not curr.get('mid1_announced'):
+                flash("Cannot announce Mid 2 before Mid 1.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+            if exam_type == 'endsem' and not curr.get('mid2_announced'):
+                flash("Cannot announce End-Sem before Mid 2.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+        else: # Turning OFF
+            if exam_type == 'mid1' and curr.get('mid2_announced'):
+                flash("Cannot un-announce Mid 1 while Mid 2 is still public.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+            if exam_type == 'mid2' and curr.get('endsem_announced'):
+                flash("Cannot un-announce Mid 2 while End-Sem is still public.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+
+        # 4. Update Announcement
+        col = f"{exam_type}_announced"
+        payload = {col: status, 'updated_at': datetime.datetime.now().isoformat()}
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        resp.raise_for_status()
+
+        # 5. SYNC GRADES
+        if status: # Only sync when announcing
+            import threading
+            # Run in background to prevent UI hang
+            threading.Thread(target=sync_batch_grades, args=(batch, curr.get('current_sem_type', 'odd'))).start()
+
+        flash(f"Result announcement updated for {batch.upper()}. Grade syncing started in background.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('admin_result_management_page'))
+
+@app.route("/admin/toggle-semester", methods=["POST"])
+@login_required(role='admin')
+def toggle_semester_type():
+    batch = request.form.get('batch')
+    sem_type = request.form.get('sem_type') # odd, even
+    if not batch or not sem_type:
+        flash("Invalid request.", "danger")
+        return redirect(url_for('admin_result_management_page'))
+        
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        params = {'batch': f'eq.{batch}'}
+        payload = {'current_sem_type': sem_type, 'updated_at': datetime.datetime.now().isoformat()}
+        requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        flash(f"Semester set to {sem_type.upper()} for {batch.upper()}.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin_result_management_page'))
+
+def sync_batch_grades(batch, sem_type):
+    """Optimized batch grade synchronization using single-query fetching and batch upsert."""
+    print(f"Starting optimized background grade sync for {batch} ({sem_type})...")
+    try:
+        # 1. Determine semester number
+        sem_map = {
+            ('b1', 'odd'): 1, ('b1', 'even'): 2,
+            ('b2', 'odd'): 3, ('b2', 'even'): 4,
+            ('b3', 'odd'): 5, ('b3', 'even'): 6,
+            ('b4', 'odd'): 7, ('b4', 'even'): 8,
+        }
+        sem_num = sem_map.get((batch, sem_type), 1)
+        
+        # 2. Fetch all students, all marks, and all existing grades in 3 single calls
+        marks_table = f"marks{batch[1]}"
+        
+        # Fetch Students
+        std_resp = requests.get(get_supabase_rest_url(batch), headers=SUPABASE_HEADERS, timeout=15)
+        if not std_resp.ok: return
+        students = std_resp.json()
+        
+        # Fetch ALL Marks for this batch table
+        marks_resp = requests.get(f"{SUPABASE_URL}/rest/v1/{marks_table}", headers=SUPABASE_HEADERS, timeout=15)
+        if not marks_resp.ok: return
+        all_marks_list = marks_resp.json()
+        
+        # Fetch ALL Existing Grades
+        grades_resp = requests.get(f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}", headers=SUPABASE_HEADERS, timeout=15)
+        if not grades_resp.ok: return
+        all_grades_list = grades_resp.json()
+        
+        # 3. Organize data by Roll Number for fast lookup
+        from collections import defaultdict
+        marks_by_roll = defaultdict(list)
+        for m in all_marks_list:
+            marks_by_roll[m['roll_no']].append(m)
+            
+        grades_by_roll = {g['roll_no']: g for g in all_grades_list}
+        
+        upsert_payloads = []
+        
+        # 4. Calculate for every student
+        for student in students:
+            roll = student['roll_no']
+            marks = marks_by_roll.get(roll, [])
+            
+            if not marks: continue
+            
+            total_score = 0
+            total_credits = 0
+            for m in marks:
+                internal = float(m.get('internal_marks') or 0)
+                endsem = float(m.get('endsem') or 0)
+                credits = int(m.get('credits') or 4)
+                point = (internal + endsem) / 10.0
+                total_score += (point * credits)
+                total_credits += credits
+            
+            if total_credits > 0:
+                sgpa = round(total_score / total_credits, 2)
+                
+                # Get existing grade record or create new
+                g_data = grades_by_roll.get(roll, {'roll_no': roll})
+                g_data[f'sgpa_sem{sem_num}'] = sgpa
+                g_data[f'total_credits_sem{sem_num}'] = total_credits
+                
+                # Calculate CGPA
+                tp = 0
+                tc = 0
+                for i in range(1, 9):
+                    s = g_data.get(f'sgpa_sem{i}')
+                    c = g_data.get(f'total_credits_sem{i}')
+                    if s and c:
+                        tp += (float(s) * int(c))
+                        tc += int(c)
+                
+                cgpa = round(tp / tc, 2) if tc > 0 else 0
+                
+                # Prepare Upsert Object
+                payload = {
+                    'roll_no': roll,
+                    f'sgpa_sem{sem_num}': sgpa,
+                    f'total_credits_sem{sem_num}': total_credits,
+                    'cgpa': cgpa
+                }
+                upsert_payloads.append(payload)
+        
+        # 5. Batch Upsert to Supabase
+        if upsert_payloads:
+            # PostgREST batch upsert: POST with Prefer: resolution=merge-duplicates
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'resolution=merge-duplicates'
+            upsert_resp = requests.post(
+                f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}", 
+                headers=headers, 
+                json=upsert_payloads, 
+                timeout=20
+            )
+            if not upsert_resp.ok:
+                print(f"Batch upsert failed: {upsert_resp.text}")
+                
+        print(f"Optimized grade sync finished for {batch}. {len(upsert_payloads)} records updated.")
+    except Exception as e:
+        print(f"Critical error in optimized sync_batch_grades: {e}")
+
+def recalculate_cgpa(roll_no):
+    """Calculates CGPA across all semesters for a student (Fallback/Manual)."""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}"
+        params = {'roll_no': f'eq.{roll_no}'}
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        if not resp.ok or not resp.json():
+            print(f"No grade record found for {roll_no}")
+            return
+            
+        data = resp.json()[0]
+        total_points = 0
+        total_credits = 0
+        
+        for i in range(1, 9):
+            sgpa = data.get(f'sgpa_sem{i}')
+            credits = data.get(f'total_credits_sem{i}')
+            if sgpa and credits:
+                total_points += (float(sgpa) * int(credits))
+                total_credits += int(credits)
+        
+        if total_credits > 0:
+            cgpa = round(total_points / total_credits, 2)
+            requests.patch(url, headers=SUPABASE_HEADERS, params=params, json={'cgpa': cgpa}, timeout=10)
+            
+    except Exception as e:
+        print(f"Error recalculating CGPA for {roll_no}: {e}")
+
+# --- END: BATCH PROMOTION & BACKLOG ROUTES ---
 
 # --- Error Handling ---
 @app.errorhandler(404)

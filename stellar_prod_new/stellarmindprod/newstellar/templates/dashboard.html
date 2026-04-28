@@ -352,6 +352,9 @@
         .role-badge.admin {
             background: linear-gradient(90deg, #f87171, #ef4444); /* Red */
         }
+        .role-badge.alumni {
+            background: linear-gradient(90deg, #6b7a8c, #4a5568); /* Gray */
+        }
         /* End of Role Badge Style */
 
         .hero-text p {
@@ -988,31 +991,19 @@
     </nav>
 
     <section class="hero">
-        <div class="hero-text">
-            <h1>
-                <!-- MODIFICATION: Added class="brand-gradient" to this span -->
-                Welcome to <span class="brand-gradient">Stellar Mind</span><br>
-                <!-- Display user's name if logged in -->
-                {% if session.user %}
-                    {% set display_name = session.user.student_name or session.user.teacher_name or session.user.username %}
-                    <span id="welcome-user" class="gradient-username">Hi, {{ display_name }} 👋</span>
-                    
-                    <!-- Stylish Role Badge -->
-                    {% if session.user.role == 'student' and session.user.batch %}
-                        <span class="role-badge student">{{ session.user.batch }}</span>
-                    {% elif session.user.role == 'teacher' %}
-                        <span class="role-badge teacher">{{ session.user.role }}</span>
-                    {% elif session.user.role == 'admin' %}
-                        <span class="role-badge admin">{{ session.user.role }}</span>
-                    {% endif %}
+        <div class="hero-text fade-in">
+            <h1>Welcome to <span class="brand-gradient">Stellar Mind</span></h1>
+            <h1>Hello, <span class="brand-gradient">{{ session.user.student_name or session.user.teacher_name or session.user.username }}</span>
+                {% if session.user.role == 'student' %}
+                    <span class="role-badge {{ session.user.batch if session.user.batch in STUDENT_TABLES else 'alumni' }}">
+                        {{ session.user.batch|upper if session.user.batch in STUDENT_TABLES else 'ALUMNI' }}
+                    </span>
+                {% else %}
+                    <span class="role-badge {{ session.user.role }}">{{ session.user.role|upper }}</span>
                 {% endif %}
             </h1>
-            <p>
-                Stellar Mind is a community-driven club where innovation meets creativity.
-                We explore cutting-edge technology, design, and ideas to inspire the next generation of thinkers and
-                creators.
-            </p>
-            <a href="#" class="btn">About Us</a> <!-- Placeholder About Us link -->
+            <p>Welcome to your personal dashboard. Stay updated with your classes, events, and performance.</p>
+            <a href="#" class="btn">About Us</a>
         </div>
 
         <div class="spline-card">
@@ -1032,6 +1023,9 @@
 
     <!-- Today's Classes (Only for Students) -->
     {% if session.user.role == 'student' %}
+    <div id="backlog-alert" style="display:none; margin: 1rem 10%; background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 1rem; border: 1px solid #fecaca; text-align: center; font-weight: 600;">
+        <i class="fas fa-exclamation-triangle"></i> You have active backlogs. Please check your <a href="{{ url_for('student_marks_page') }}" style="color: #ef4444; text-decoration: underline;">Marks Page</a> for details.
+    </div>
     <section class="todays-classes" id="todays-classes-section">
         <h2>Today's Classes</h2>
         <div id="classes-list" class="classes-list">
@@ -1262,6 +1256,25 @@
                 fetchNotifications();
                 // Polling every 30 seconds
                 setInterval(fetchNotifications, 30000);
+
+                // Check for backlogs if student
+                {% if session.user.role == 'student' %}
+                async function checkBacklogs() {
+                    try {
+                        const supabaseClient = supabase.createClient("{{ supabase_url }}", "{{ supabase_key }}");
+                        const { data } = await supabaseClient
+                            .from('backlogs')
+                            .select('id')
+                            .eq('roll_no', '{{ session.user.roll_no }}')
+                            .eq('status', 'active');
+                        
+                        if (data && data.length > 0) {
+                            document.getElementById('backlog-alert').style.display = 'block';
+                        }
+                    } catch (e) { console.error("Backlog check failed:", e); }
+                }
+                checkBacklogs();
+                {% endif %}
             }
         });
     </script>
