@@ -488,9 +488,10 @@
      * Dynamically fetches marks for a past semester and prints them
      */
     async function printSemesterResult(semNum) {
-        // Determine table based on semester (1-2: marks1, 3-4: marks2, etc)
+        // Determine table based on semester (1: marks1, 2: marks1e, 3: marks2, 4: marks2e, etc)
         const tableIndex = Math.ceil(semNum / 2);
-        const tableName = `marks${tableIndex}`;
+        const isEven = semNum % 2 === 0;
+        const tableName = `marks${tableIndex}${isEven ? 'e' : ''}`;
         
         try {
             // Show loading state

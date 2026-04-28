@@ -165,12 +165,18 @@
                 
                 {% if session.user.role == 'admin' %}
                     <li><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                    <li><a href="{{ url_for('admin_hostel_management') }}"><i class="fas fa-hotel"></i> Hostels</a></li>
                 {% else %}
                     <li><a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
                 {% endif %}
 
                 {% if session.user.role == 'student' %}
                     <li><a href="{{ url_for('student_marks_page') }}"><i class="fas fa-clipboard-check"></i> My Marks</a></li>
+                    <li><a href="{{ url_for('student_hostel_page') }}"><i class="fas fa-hotel"></i> Hostel</a></li>
+                {% endif %}
+
+                {% if session.user.role == 'teacher' and session.user.is_warden %}
+                    <li><a href="{{ url_for('warden_dashboard') }}" style="color: #6366f1; font-weight: bold;"><i class="fas fa-user-shield"></i> Warden</a></li>
                 {% endif %}
 
                 {% if session.user.role in ['teacher', 'admin'] %}
