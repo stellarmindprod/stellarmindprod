@@ -20,7 +20,6 @@ COURSE_TABLE = "courses"
 GRADES_TABLE = "grades"
 BACKLOG_TABLE = "backlogs"
 MARKS_TABLES = ["marks1", "marks2", "marks3", "marks4"]
-EVEN_MARKS_TABLES = ["marks1e", "marks2e", "marks3e", "marks4e"]
 ATTENDANCE_TABLES = ["attendance1", "attendance2", "attendance3", "attendance4"] # For batch-specific attendance
 
 # Assumed table names based on old project files (add these to your DB)
@@ -36,12 +35,6 @@ YEAR_BACK_TABLE = "year_back_students"
 # --- Notifications Tables ---
 NOTIFICATIONS_TABLE = "notifications"
 NOTIFICATION_READS_TABLE = "notification_reads"
-
-# --- Hostel & Warden Tables ---
-HOSTELS_TABLE = "hostels"
-WARDENS_TABLE = "wardens"
-HOSTEL_ASSIGNMENTS_TABLE = "hostel_assignments"
-HOSTEL_COMPLAINTS_TABLE = "hostel_complaints"
 
 # --- Headers for Supabase REST API calls ---
 # Using Anon key - ensure RLS is properly configured if using this.
