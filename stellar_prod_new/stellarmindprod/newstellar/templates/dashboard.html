@@ -941,24 +941,11 @@
                 {% endif %}
             </li>
             
-            <!-- Student specific links -->
-            {% if session.user.role == 'student' %}
-            <li><a href="{{ url_for('student_hostel_page') }}"><i class="fas fa-hotel"></i> Hostel Portal</a></li>
-            {% endif %}
-
-            <!-- Warden specific link -->
-            {% if session.user.role == 'teacher' and session.user.is_warden %}
-            <li><a href="{{ url_for('warden_dashboard') }}" style="color: #6366f1; font-weight: bold;"><i class="fas fa-user-shield"></i> Warden Dashboard</a></li>
-            {% endif %}
-
             <!-- Teacher/Admin only links -->
             {% if session.user.role == 'teacher' or session.user.role == 'admin' %}
             <li id="teacher-performance-link">
                 <a href="{{ url_for('view_student_profiles_page') }}"><i class="fas fa-chart-line"></i> Student Performance</a>
             </li>
-            {% if session.user.role == 'admin' %}
-            <li><a href="{{ url_for('admin_hostel_management') }}"><i class="fas fa-hotel"></i> Hostel Management</a></li>
-            {% endif %}
             <li id="event-management-link">
                 <a href="{{ url_for('manage_events_page') }}"><i class="fas fa-calendar-alt"></i> Event Management</a>
             </li>
@@ -1040,12 +1027,7 @@
         <i class="fas fa-exclamation-triangle"></i> You have active backlogs. Please check your <a href="{{ url_for('student_marks_page') }}" style="color: #ef4444; text-decoration: underline;">Marks Page</a> for details.
     </div>
     <section class="todays-classes" id="todays-classes-section">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Today's Classes</h2>
-            <a href="{{ url_for('student_hostel_page') }}" class="btn" style="background: #1e293b; border-radius: 2rem; font-size: 0.8rem;">
-                <i class="fas fa-hotel"></i> Hostel Portal
-            </a>
-        </div>
+        <h2>Today's Classes</h2>
         <div id="classes-list" class="classes-list">
             {% if today_is_holiday %}
                 <div class="holiday-message">🎉 Today is a Holiday 🎉</div>

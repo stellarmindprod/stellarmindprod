@@ -160,30 +160,6 @@
     </div>
 
     <div class="mgmt-card">
-        <!-- Global Semester Switch -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding: 1.5rem; background: #f8fafc; border-radius: 1rem; border: 1px solid #e2e8f0;">
-            <div>
-                <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color);">Global Semester Switch</h3>
-                <p style="margin: 0; font-size: 0.85rem; color: var(--subtle-text);">Switch all batches to ODD or EVEN simultaneously</p>
-            </div>
-            <div style="display: flex; gap: 1rem;">
-                <form action="{{ url_for('toggle_semester_type') }}" method="POST">
-                    <input type="hidden" name="batch" value="all">
-                    <input type="hidden" name="sem_type" value="odd">
-                    <button type="submit" class="btn-toggle" style="background: #3b82f6; color: white; width: 160px;">
-                        Set ALL to ODD
-                    </button>
-                </form>
-                <form action="{{ url_for('toggle_semester_type') }}" method="POST">
-                    <input type="hidden" name="batch" value="all">
-                    <input type="hidden" name="sem_type" value="even">
-                    <button type="submit" class="btn-toggle" style="background: #6366f1; color: white; width: 160px;">
-                        Set ALL to EVEN
-                    </button>
-                </form>
-            </div>
-        </div>
-
         <table class="data-table">
             <thead>
                 <tr>

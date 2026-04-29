@@ -488,10 +488,9 @@
      * Dynamically fetches marks for a past semester and prints them
      */
     async function printSemesterResult(semNum) {
-        // Determine table based on semester (1: marks1, 2: marks1e, 3: marks2, 4: marks2e, etc)
+        // Determine table based on semester (1-2: marks1, 3-4: marks2, etc)
         const tableIndex = Math.ceil(semNum / 2);
-        const isEven = semNum % 2 === 0;
-        const tableName = `marks${tableIndex}${isEven ? 'e' : ''}`;
+        const tableName = `marks${tableIndex}`;
         
         try {
             // Show loading state
@@ -540,8 +539,15 @@
             printWindow.document.write('<style>body{font-family:sans-serif; padding:40px;} .header{text-align:center; border-bottom:2px solid #eee; margin-bottom:20px; padding-bottom:20px;} .footer{margin-top:40px; text-align:center; font-size:0.8rem; color:#888;}</style>');
             printWindow.document.write('</head><body>');
             printWindow.document.write(`
-                <div class="header">
-                    <h1>NIT Sikkim</h1>
+                <div class="header" style="text-align: center; border-bottom: 2px solid #eee; margin-bottom: 20px; padding-bottom: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+                        <img src="${window.location.origin}/static/images/nitlogo.png" alt="NIT Sikkim" style="width: 80px; height: 80px; margin-right: 15px;" />
+                        <div style="text-align: center;">
+                            <h1 style="margin: 0; color: #800000; font-size: 26px; font-weight: bold; font-family: sans-serif;">राष्ट्रीय प्रौद्योगिकी संस्थान सिक्किम</h1>
+                            <h2 style="margin: 5px 0; color: #000080; font-size: 18px; font-weight: bold; font-family: sans-serif;">NATIONAL INSTITUTE OF TECHNOLOGY SIKKIM</h2>
+                            <p style="margin: 0; color: #800000; font-size: 12px; font-style: italic; font-family: sans-serif;">(An Institute of National Importance, Ministry of Education, Govt. of India)</p>
+                        </div>
+                    </div>
                     <h2>Semester ${semNum} Grade Report</h2>
                     <p>Student: ${STUDENT_NAME} (${STUDENT_ROLL_NO.toUpperCase()})</p>
                 </div>
@@ -593,9 +599,16 @@
         printWindow.document.write('</style></head><body>');
         
         printWindow.document.write(`
-            <div class="header">
-                <h1>National Institute of Technology Sikkim</h1>
-                <p>Academic Grade Report - ${examType.toUpperCase()}</p>
+            <div class="header" style="text-align: center; border-bottom: 2px solid #e2e8f0; margin-bottom: 30px; padding-bottom: 20px;">
+                <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+                    <img src="${window.location.origin}/static/images/nitlogo.png" alt="NIT Sikkim" style="width: 90px; height: 90px; margin-right: 20px;" />
+                    <div style="text-align: center;">
+                        <h1 style="margin: 0; color: #800000; font-size: 28px; font-weight: bold; font-family: sans-serif;">राष्ट्रीय प्रौद्योगिकी संस्थान सिक्किम</h1>
+                        <h2 style="margin: 5px 0; color: #000080; font-size: 20px; font-weight: bold; font-family: sans-serif;">NATIONAL INSTITUTE OF TECHNOLOGY SIKKIM</h2>
+                        <p style="margin: 0; color: #800000; font-size: 14px; font-style: italic; font-family: sans-serif;">(An Institute of National Importance, Ministry of Education, Govt. of India)</p>
+                    </div>
+                </div>
+                <p style="font-size: 1.2rem; font-weight: bold; margin-top: 10px;">Academic Grade Report - ${examType.toUpperCase()}</p>
             </div>
             <div class="student-info">
                 <div>
