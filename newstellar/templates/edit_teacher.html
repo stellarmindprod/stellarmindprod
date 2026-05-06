@@ -104,6 +104,23 @@
             <label for="teacher_email">Email</label>
             <input type="email" id="teacher_email" name="teacher_email" value="{{ teacher.teacher_email }}" required>
         </div>
+        <div class="form-group">
+            <label for="teacher_phone">Phone Number</label>
+            <input type="text" id="teacher_phone" name="teacher_phone" value="{{ teacher.teacher_phone or '' }}" placeholder="e.g., +91 9876543210">
+        </div>
+        
+        <div class="form-group">
+            <label for="is_hod">Is HOD?</label>
+            <select id="is_hod" name="is_hod" style="padding: 0.75rem; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem;">
+                <option value="false" {% if not teacher.is_hod %}selected{% endif %}>No</option>
+                <option value="true" {% if teacher.is_hod %}selected{% endif %}>Yes</option>
+            </select>
+        </div>
+        
+        <div class="form-group" id="hod_dept_group" style="{% if not teacher.is_hod %}display: none;{% endif %}">
+            <label for="hod_department">HOD Department</label>
+            <input type="text" id="hod_department" name="hod_department" value="{{ teacher.hod_department or '' }}" placeholder="e.g., Computer Science">
+        </div>
         
         <!-- Password field intentionally removed as requested -->
 
@@ -112,5 +129,20 @@
         <a href="{{ url_for('manage_teachers_page') }}" class="btn btn-cancel">Cancel</a>
     </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const isHodSelect = document.getElementById('is_hod');
+            const hodDeptGroup = document.getElementById('hod_dept_group');
+            
+            if (isHodSelect) {
+                isHodSelect.addEventListener('change', function() {
+                    hodDeptGroup.style.display = this.value === 'true' ? 'block' : 'none';
+                });
+            }
+        });
+    </script>
 {% endblock %}
 

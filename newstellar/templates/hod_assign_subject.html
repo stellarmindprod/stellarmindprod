@@ -1,0 +1,194 @@
+{% extends "layout.html" %}
+
+{% block title %}Assign Subjects - {{ department }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        :root {
+            --accent-color: #10b981;
+            --accent-hover: #059669;
+        }
+        .content-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #f0f4f8;
+            padding-bottom: 1rem;
+        }
+        .header-flex h2 { color: var(--accent-color); margin: 0; }
+        
+        .course-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .course-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+        .course-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .course-code {
+            font-weight: 700;
+            color: var(--accent-color);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        .course-name {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            min-height: 2.4rem;
+        }
+        .assignment-form select {
+            width: 100%;
+            padding: 0.6rem;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 1rem;
+        }
+        .btn-assign {
+            width: 100%;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.6rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-assign:hover {
+            background-color: var(--accent-hover);
+        }
+        .current-teacher {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <div class="header-flex">
+        <h2>Assign Teachers to Subjects</h2>
+        <span class="badge" style="background: var(--accent-color); color: white; padding: 0.4rem 0.8rem; border-radius: 20px;">{{ department }}</span>
+    </div>
+    
+    <div id="loading-msg">Loading department courses...</div>
+    <div class="course-grid" id="course-container"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const department = "{{ department }}";
+    const container = document.getElementById('course-container');
+    const loadingMsg = document.getElementById('loading-msg');
+    const teachers = {{ all_teachers | tojson | safe }};
+    
+    const supabaseUrl = "{{ supabase_url }}";
+    const supabaseKey = "{{ supabase_key }}";
+    const supabase = supabasejs.createClient(supabaseUrl, supabaseKey);
+
+    async function fetchCourses() {
+        try {
+            // Fetch courses for this department
+            const { data, error } = await supabase
+                .from('courses')
+                .select('*')
+                .eq('department', department)
+                .order('semester', { ascending: true });
+
+            if (error) throw error;
+
+            loadingMsg.style.display = 'none';
+            if (data.length === 0) {
+                container.innerHTML = '<p>No courses found for this department. Ask Admin to add courses with department set to "' + department + '".</p>';
+                return;
+            }
+
+            renderCourses(data);
+        } catch (err) {
+            console.error("Error:", err);
+            loadingMsg.textContent = "Error loading courses: " + err.message;
+        }
+    }
+
+    function renderCourses(courses) {
+        container.innerHTML = '';
+        courses.forEach(course => {
+            const card = document.createElement('div');
+            card.className = 'course-card';
+            
+            let teacherOptions = '<option value="">-- Unassigned --</option>';
+            teachers.forEach(t => {
+                const selected = t.username === course.assisting_teacher ? 'selected' : '';
+                teacherOptions += `<option value="${t.username}" ${selected}>${t.teacher_name} (${t.username})</option>`;
+            });
+
+            card.innerHTML = `
+                <div class="course-code">${course.course_code}</div>
+                <div class="course-name">${course.course_name}</div>
+                <div class="current-teacher">
+                    <i class="fas fa-user"></i> Assigned: ${course.assisting_teacher || 'None'}
+                </div>
+                <form class="assignment-form" data-code="${course.course_code}">
+                    <select name="teacher_username">
+                        ${teacherOptions}
+                    </select>
+                    <button type="submit" class="btn-assign">Update Assignment</button>
+                </form>
+            `;
+            
+            const form = card.querySelector('.assignment-form');
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = form.querySelector('button');
+                const originalText = btn.textContent;
+                btn.textContent = 'Updating...';
+                btn.disabled = true;
+
+                const newTeacher = form.teacher_username.value;
+                const courseCode = form.dataset.code;
+
+                try {
+                    const { error } = await supabase
+                        .from('courses')
+                        .update({ assisting_teacher: newTeacher || null })
+                        .eq('course_code', courseCode);
+
+                    if (error) throw error;
+                    alert('Successfully updated assignment for ' + courseCode);
+                    // Refresh current display
+                    card.querySelector('.current-teacher').innerHTML = `<i class="fas fa-user"></i> Assigned: ${newTeacher || 'None'}`;
+                } catch (err) {
+                    alert('Update failed: ' + err.message);
+                } finally {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            });
+
+            container.appendChild(card);
+        });
+    }
+
+    fetchCourses();
+});
+</script>
+{% endblock %}

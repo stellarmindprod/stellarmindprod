@@ -1,0 +1,251 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin - Hostel Management{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .admin-hostel-container { max-width: 1100px; margin: 2rem auto; }
+        .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .setup-card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-hostel-container">
+    <div class="header-section" style="margin-bottom: 2rem;">
+        <h1 style="font-size: 2rem; font-weight: 800; color: #1e293b;">Hostel & Warden Management</h1>
+        <p style="color: #64748b;">Assign teachers as wardens and allocate student rooms.</p>
+    </div>
+
+    <div class="setup-grid">
+        <!-- Assign Warden -->
+        <div class="setup-card">
+            <h2 style="font-size: 1.25rem; margin-bottom: 1.5rem;"><i class="fas fa-user-shield" style="color: #6366f1;"></i> Assign Warden</h2>
+            <form id="warden-form">
+                <div class="form-group">
+                    <label>Select Hostel</label>
+                    <select name="hostel_name" id="w-hostel" required>
+                        <option value="BH1">BH1</option>
+                        <option value="BH2">BH2</option>
+                        <option value="OH1">OH1</option>
+                        <option value="OH2">OH2</option>
+                        <option value="GH1">GH1</option>
+                        <option value="GH2">GH2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Select Teacher</label>
+                    <input list="teacher-list" name="teacher_email" id="w-email" placeholder="Search teacher by name..." required>
+                    <datalist id="teacher-list">
+                        {% for t in teachers %}
+                        <option value="{{ t.teacher_email }}">{{ t.teacher_name }} ({{ t.teacher_email }})</option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <button type="button" class="btn" style="width: 100%;" onclick="assignWarden()">Assign Warden</button>
+            </form>
+        </div>
+
+        <!-- Current Wardens List -->
+        <div class="setup-card">
+            <h2 style="font-size: 1.25rem; margin-bottom: 1.5rem;"><i class="fas fa-id-badge" style="color: #6366f1;"></i> Current Wardens</h2>
+            <div style="overflow-y: auto; max-height: 250px;">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th>Hostel</th>
+                            <th>Warden Email</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wardens-body">
+                        <tr><td colspan="2" style="text-align: center;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <button class="btn" style="background: #e2e8f0; color: #1e293b; font-size: 0.75rem; width: 100%; margin-top: 1rem;" onclick="loadWardens()">Refresh Wardens</button>
+        </div>
+    </div>
+
+    <!-- Current Assignments Table -->
+    <div class="setup-card" style="margin-top: 2rem; width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="font-size: 1.25rem;"><i class="fas fa-list" style="color: #64748b;"></i> Current Assignments</h2>
+            <button class="btn" style="background: #e2e8f0; color: #1e293b; font-size: 0.8rem; padding: 5px 15px;" onclick="loadAssignments()">Refresh List</button>
+        </div>
+
+    <!-- Allocate Student Section -->
+    <div class="setup-grid" style="margin-top: 2rem;">
+        <div class="setup-card">
+            <h2 style="font-size: 1.25rem; margin-bottom: 1.5rem;"><i class="fas fa-bed" style="color: #3b82f6;"></i> Allocate Student Room</h2>
+            <form id="student-form">
+                <div class="form-group">
+                    <label>Select Student</label>
+                    <input list="student-list" name="roll_no" id="s-roll" placeholder="Search by name or roll no..." required>
+                    <datalist id="student-list">
+                        {% for s in all_students %}
+                        <option value="{{ s.roll_no }}">{{ s.display }}</option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="form-group">
+                    <label>Select Hostel</label>
+                    <select name="hostel_name" id="s-hostel" required>
+                        <option value="BH1">BH1</option>
+                        <option value="BH2">BH2</option>
+                        <option value="OH1">OH1</option>
+                        <option value="OH2">OH2</option>
+                        <option value="GH1">GH1</option>
+                        <option value="GH2">GH2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Room Number</label>
+                    <input type="text" name="room_no" id="s-room" placeholder="e.g. 101-A" required>
+                </div>
+                <button type="button" class="btn" style="width: 100%; background: #1e293b;" onclick="assignStudent()">Assign Room</button>
+            </form>
+        </div>
+        
+        <!-- Space for more future tools -->
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+             <!-- Add more admin tools here if needed -->
+        </div>
+    </div>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Roll No</th>
+                        <th>Hostel</th>
+                        <th>Room</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="assignments-body">
+                    <tr><td colspan="4" style="text-align: center; color: #94a3b8;">Click refresh to load data</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "{{ supabase_url }}";
+        const SUPABASE_KEY = "{{ supabase_key }}";
+        
+        async function loadWardens() {
+            const body = document.getElementById('wardens-body');
+            body.innerHTML = '<tr><td colspan="2" style="text-align: center;">Loading...</td></tr>';
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/wardens?select=*`, {
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                const data = await response.json();
+                body.innerHTML = '';
+                if (data.length === 0) {
+                    body.innerHTML = '<tr><td colspan="2" style="text-align: center;">No wardens assigned</td></tr>';
+                } else {
+                    data.forEach(row => {
+                        body.innerHTML += `<tr><td><b>${row.hostel_name}</b></td><td>${row.teacher_email}</td></tr>`;
+                    });
+                }
+            } catch (e) { body.innerHTML = '<tr><td colspan="2" style="text-align: center;">Error</td></tr>'; }
+        }
+
+        async function loadAssignments() {
+            const body = document.getElementById('assignments-body');
+            body.innerHTML = '<tr><td colspan="4" style="text-align: center;">Loading...</td></tr>';
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/hostel_assignments?select=*&order=hostel_name.asc,room_no.asc`, {
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                const data = await response.json();
+                body.innerHTML = '';
+                if (data.length === 0) {
+                    body.innerHTML = '<tr><td colspan="4" style="text-align: center;">No assignments found</td></tr>';
+                } else {
+                    data.forEach(row => {
+                        body.innerHTML += `
+                            <tr>
+                                <td>${row.roll_no.toUpperCase()}</td>
+                                <td>${row.hostel_name}</td>
+                                <td>${row.room_no}</td>
+                                <td>
+                                    <button class="btn" style="background: #fee2e2; color: #991b1b; padding: 2px 10px; font-size: 0.75rem;" onclick="deleteAssignment(${row.id})">Delete</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            } catch (e) { body.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Error loading data</td></tr>'; }
+        }
+
+        async function deleteAssignment(id) {
+            if (!confirm('Are you sure you want to remove this assignment?')) return;
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/hostel_assignments?id=eq.${id}`, {
+                    method: 'DELETE',
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                if (response.ok) { loadAssignments(); }
+            } catch (e) { alert('Error deleting assignment'); }
+        }
+
+        async function assignWarden() {
+            const hostel = document.getElementById('w-hostel').value;
+            const email = document.getElementById('w-email').value;
+            
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/wardens`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates'
+                    },
+                    body: JSON.stringify({ hostel_name: hostel, teacher_email: email })
+                });
+                if (response.ok) {
+                    alert('Warden assigned successfully!');
+                    loadWardens(); // Refresh list
+                }
+                else alert('Error: ' + await response.text());
+            } catch (e) { alert('Error connecting to database'); }
+        }
+
+        async function assignStudent() {
+            const roll = document.getElementById('s-roll').value.toLowerCase();
+            const hostel = document.getElementById('s-hostel').value;
+            const room = document.getElementById('s-room').value;
+            
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/hostel_assignments`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates'
+                    },
+                    body: JSON.stringify({ roll_no: roll, hostel_name: hostel, room_no: room })
+                });
+                if (response.ok) {
+                    alert('Student assigned successfully!');
+                    loadAssignments(); // Refresh list
+                }
+                else alert('Error: ' + await response.text());
+            } catch (e) { alert('Error connecting to database'); }
+        }
+
+        // Initial load
+        window.onload = () => {
+            loadAssignments();
+            loadWardens();
+        };
+    </script>
+</div>
+{% endblock %}

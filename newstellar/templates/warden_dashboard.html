@@ -1,0 +1,278 @@
+{% extends "layout.html" %}
+
+{% block title %}Warden Dashboard - {{ hostel_name }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .warden-container { max-width: 1200px; margin: 2rem auto; }
+        .dashboard-header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; padding: 2.5rem; border-radius: 1.5rem; margin-bottom: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-card { background: white; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02); display: flex; align-items: center; gap: 1rem; border: 1px solid #f1f5f9; }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+        
+        .main-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 2rem; }
+        @media (max-width: 1024px) { .main-grid { grid-template-columns: 1fr; } }
+        
+        .content-card { background: white; border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 1rem; }
+        .card-title { font-size: 1.2rem; font-weight: 700; color: #1e293b; }
+        
+        .resident-row:hover { background: #f8fafc; }
+        .resident-avatar { width: 32px; height: 32px; background: #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #64748b; }
+        
+        .complaint-pill { font-size: 0.75rem; padding: 0.3rem 0.75rem; border-radius: 1rem; font-weight: 700; }
+        .status-pending { background: #fee2e2; color: #991b1b; }
+        .status-seen { background: #dcfce7; color: #166534; }
+        
+        .action-btn { padding: 0.4rem 0.8rem; border-radius: 0.5rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+        .btn-seen { background: #ecfdf5; color: #059669; }
+        .btn-seen:hover { background: #d1fae5; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="warden-container">
+    <div class="dashboard-header">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+            <i class="fas fa-user-shield" style="font-size: 1.5rem;"></i>
+            <h1 style="margin: 0; font-size: 1.8rem;">Warden Dashboard</h1>
+        </div>
+        <p style="margin: 0; opacity: 0.8;">Managing <b>{{ hostel_name }}</b> • {{ residents|length }} Residents</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;"><i class="fas fa-users"></i></div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b;">Total Residents</div>
+                <div style="font-size: 1.25rem; font-weight: 700;">{{ residents|length }}</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #fef2f2; color: #ef4444;"><i class="fas fa-exclamation-triangle"></i></div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b;">Pending Complaints</div>
+                <div style="font-size: 1.25rem; font-weight: 700;">
+                    {{ complaints|selectattr('status', 'equalto', 'pending')|list|length }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <!-- Residents & Search -->
+        <div class="content-card">
+            <div class="card-header" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                    <div class="card-title">Hostel Residents</div>
+                    <button class="btn" style="background: #1e293b; font-size: 0.8rem; padding: 5px 15px;" onclick="toggleAssignForm()">
+                        <i class="fas fa-plus"></i> Assign Student
+                    </button>
+                </div>
+                
+                <!-- Search Box -->
+                <div style="position: relative; width: 100%;">
+                    <i class="fas fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                    <input type="text" id="residentSearch" placeholder="Search by Room No or Roll No..." 
+                           style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.9rem;"
+                           onkeyup="filterResidents()">
+                </div>
+
+                <!-- Assignment Form (Hidden by default) -->
+                <div id="assignForm" style="display: none; width: 100%; background: #f8fafc; padding: 1.5rem; border-radius: 1rem; border: 1px solid #e2e8f0; margin-top: 0.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 1rem;">Allocate New Student</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-size: 0.8rem;">Select Student</label>
+                            <input list="student-list" id="s-roll" placeholder="Search student..." style="padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem;">
+                            <datalist id="student-list">
+                                {% for s in all_students %}
+                                <option value="{{ s.roll_no }}">{{ s.display }}</option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-size: 0.8rem;">Room No</label>
+                            <input type="text" id="s-room" placeholder="e.g. 101" style="padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem;">
+                        </div>
+                        <button class="btn" style="padding: 0.6rem 1.5rem;" onclick="assignStudent()">Assign</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="residentsList" style="max-height: 600px; overflow-y: auto;">
+                {% if residents %}
+                    {% for r in residents %}
+                    <div class="resident-row" data-search="{{ r.roll_no|lower }} {{ r.room_no|lower }}" 
+                         style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #f8fafc;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="resident-avatar">{{ r.roll_no[:2]|upper }}</div>
+                            <div>
+                                <div style="font-size: 0.9rem; font-weight: 600; color: #1e293b;">{{ r.roll_no|upper }}</div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Resident</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.85rem; font-weight: 700; color: #3b82f6;">Room {{ r.room_no }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div style="text-align: center; color: #94a3b8; padding: 3rem;">No students assigned to this hostel yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Complaints -->
+        <div class="content-card">
+            <div class="card-header">
+                <div class="card-title">Recent Complaints</div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="box-shadow: none; border-radius: 0;">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Complaint</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if complaints %}
+                            {% for c in complaints %}
+                            <tr>
+                                <td><span style="font-weight: 600;">{{ c.roll_no|upper }}</span></td>
+                                <td>
+                                    <div style="font-size: 0.9rem; color: #475569; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ c.message }}">
+                                        {{ c.message }}
+                                    </div>
+                                    <small style="color: #94a3b8;">{{ c.created_at.split('T')[0] }}</small>
+                                </td>
+                                <td><span class="complaint-pill status-{{ c.status }}">{{ c.status|upper }}</span></td>
+                                <td>
+                                    {% if c.status == 'pending' %}
+                                    <form action="{{ url_for('mark_complaint_seen', id=c.id) }}" method="POST">
+                                        <button type="submit" class="action-btn btn-seen">Mark as Seen</button>
+                                    </form>
+                                    {% else %}
+                                    <span style="color: #94a3b8; font-size: 0.8rem;">Reviewed</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 3rem;">No complaints in this hostel.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Gate Pass Requests -->
+        <div class="content-card" style="margin-top: 2rem; grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-title"><i class="fas fa-ticket-alt" style="color: #10b981;"></i> Gate Pass Requests</div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="box-shadow: none; border-radius: 0;">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Out Date/Time</th>
+                            <th>Return Date/Time</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if gate_passes %}
+                            {% for gp in gate_passes %}
+                            <tr>
+                                <td><span style="font-weight: 600;">{{ gp.roll_no|upper }}</span></td>
+                                <td><small>{{ gp.out_date }}<br>{{ gp.out_time }}</small></td>
+                                <td><small>{{ gp.in_date or '-' }}<br>{{ gp.in_time or '-' }}</small></td>
+                                <td>
+                                    <div style="font-size: 0.85rem; color: #475569; max-width: 250px;">{{ gp.reason }}</div>
+                                </td>
+                                <td>
+                                    <span class="complaint-pill status-{{ gp.status }}" style="background: {% if gp.status == 'approved' %}#dcfce7{% elif gp.status == 'rejected' %}#fee2e2{% else %}#fef3c7{% endif %}; color: {% if gp.status == 'approved' %}#166534{% elif gp.status == 'rejected' %}#991b1b{% else %}#92400e{% endif %};">
+                                        {{ gp.status|upper }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if gp.status == 'pending' %}
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <form action="{{ url_for('approve_gate_pass', id=gp.id) }}" method="POST">
+                                            <input type="hidden" name="status" value="approved">
+                                            <button type="submit" class="action-btn" style="background: #10b981; color: white;">Approve</button>
+                                        </form>
+                                        <form action="{{ url_for('approve_gate_pass', id=gp.id) }}" method="POST">
+                                            <input type="hidden" name="status" value="rejected">
+                                            <button type="submit" class="action-btn" style="background: #ef4444; color: white;">Reject</button>
+                                        </form>
+                                    </div>
+                                    {% else %}
+                                    <small style="color: #94a3b8;">{{ gp.status|capitalize }} by {{ gp.approved_by }}</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 3rem;">No gate pass requests found.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = "{{ supabase_url }}";
+    const SUPABASE_KEY = "{{ supabase_key }}";
+    const CURRENT_HOSTEL = "{{ hostel_name }}";
+
+    function filterResidents() {
+        const query = document.getElementById('residentSearch').value.toLowerCase();
+        const rows = document.querySelectorAll('.resident-row');
+        rows.forEach(row => {
+            const text = row.getAttribute('data-search');
+            row.style.display = text.includes(query) ? 'flex' : 'none';
+        });
+    }
+
+    function toggleAssignForm() {
+        const form = document.getElementById('assignForm');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function assignStudent() {
+        const roll = document.getElementById('s-roll').value.toLowerCase();
+        const room = document.getElementById('s-room').value;
+        
+        if (!roll || !room) { alert('Please select a student and room number.'); return; }
+
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/hostel_assignments`, {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'resolution=merge-duplicates'
+                },
+                body: JSON.stringify({ roll_no: roll, hostel_name: CURRENT_HOSTEL, room_no: room })
+            });
+            if (response.ok) {
+                alert('Student assigned successfully!');
+                location.reload(); // Reload to show new resident
+            } else {
+                alert('Error: ' + await response.text());
+            }
+        } catch (e) { alert('Error connecting to database'); }
+    }
+</script>
+{% endblock %}
