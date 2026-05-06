@@ -962,24 +962,15 @@
             <li id="event-management-link">
                 <a href="{{ url_for('manage_events_page') }}"><i class="fas fa-calendar-alt"></i> Event Management</a>
             </li>
-            <li id="send-notification-link">
-                <a href="{{ url_for('send_notification_page') }}"><i class="fas fa-paper-plane"></i> Send Notification</a>
-            </li>
+
             {% endif %}
 
             {% if session.user.role in ['student', 'teacher', 'admin'] %}
             <li class="notification-bell" id="notification-bell">
-                <a href="#">
+                <a href="{{ url_for('notifications_page') }}">
                     <i class="fas fa-bell"></i> Notifications
                     <span class="notification-badge" id="notification-badge">0</span>
                 </a>
-                <!-- Dropdown container -->
-                <div class="notification-dropdown" id="notification-dropdown">
-                    <div class="notification-header">Notifications</div>
-                    <div id="notification-list">
-                        <div class="notification-empty">Loading...</div>
-                    </div>
-                </div>
             </li>
             {% endif %}
 

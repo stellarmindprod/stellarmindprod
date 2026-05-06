@@ -1,0 +1,430 @@
+{% extends "layout.html" %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        /* Modern, vibrant color palette for cards */
+        :root {
+            --card-color-1: #FFE5E5;
+            --card-color-2: #E5F0FF;
+            --card-color-3: #E5FFE5;
+            --card-color-4: #FFF0E5;
+            --card-color-5: #F0E5FF;
+            --whatsapp-bar-bg: #f0f2f5;
+            --whatsapp-input-bg: #ffffff;
+            --whatsapp-send-btn: #00a884;
+            --whatsapp-send-btn-hover: #008f6f;
+        /* Override layout.html container for true full window feel */
+        .container {
+            max-width: 100% !important;
+            width: 100% !important; /* Forces the flex item to take full width */
+            padding: 0 1rem !important;
+        }
+
+        .notifications-wrapper {
+            /* Full width layout */
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 2rem 5%; /* 5% padding to give some breathing room */
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+            box-sizing: border-box;
+            /* Make room for the sticky bottom bar if it exists */
+            padding-bottom: {% if session.user.role in ['teacher', 'admin'] %}120px{% else %}2rem{% endif %};
+        }
+
+        .section-title {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent-end, #0087c5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            border-bottom: 4px solid var(--accent-start, #4299e1);
+            padding-bottom: 0.5rem;
+            font-weight: 800;
+            width: fit-content;
+            margin: 0 auto; /* Center the title */
+        }
+
+        /* Inbox Styles: Single column layout for completely wide notifications */
+        .notif-feed-container {
+            display: block;
+            width: 100%;
+        }
+
+        /* Dynamic Card Sizing */
+        .notif-feed-item {
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: block; /* Use block to force 100% width */
+            margin-bottom: 1.5rem;
+        }
+
+        .notif-feed-item:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .notif-feed-item.unread::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 12px;
+            height: 12px;
+            background-color: var(--danger-color, #e74c3c);
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(231, 76, 60, 0.6);
+        }
+
+        /* Color classes to be applied randomly via JS */
+        .card-bg-1 { background: var(--card-color-1); color: #8B0000; }
+        .card-bg-2 { background: var(--card-color-2); color: #00008B; }
+        .card-bg-3 { background: var(--card-color-3); color: #006400; }
+        .card-bg-4 { background: var(--card-color-4); color: #8B4500; }
+        .card-bg-5 { background: var(--card-color-5); color: #4B0082; }
+
+        .notif-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            font-weight: 600;
+        }
+
+        .notif-sender {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .notif-sender i {
+            font-size: 1.2rem;
+        }
+
+        .notif-date {
+            font-size: 0.8rem;
+            background: rgba(255,255,255,0.5);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+        }
+
+        .notif-message {
+            font-size: 1.15rem;
+            line-height: 1.6;
+            flex-grow: 1;
+            font-weight: 500;
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 5rem 1rem;
+            color: var(--subtle-text, #6c757d);
+            background: transparent;
+            width: 100%;
+        }
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent-start, #4299e1);
+        }
+
+        /* WhatsApp-style Send Bar */
+        .send-bar-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--whatsapp-bar-bg);
+            padding: 1rem 2rem;
+            box-sizing: border-box; /* Fixes the overflow issue */
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+        }
+
+        .send-form-inner {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        .pill-select-container {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .pill-select {
+            appearance: auto;
+            background-color: #e9edef;
+            border: none;
+            border-radius: 20px;
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #54656f;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .pill-select:hover {
+            background-color: #d1d7db;
+        }
+
+        .pill-select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--whatsapp-send-btn);
+        }
+
+        .chat-input-wrapper {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            gap: 1rem; /* Creates space between the input and the button */
+        }
+
+        .chat-input {
+            flex-grow: 1; /* Takes up remaining space instead of fixed 100% */
+            width: auto;
+            background-color: var(--whatsapp-input-bg);
+            border: 1px solid #d1d7db;
+            border-radius: 24px;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            font-family: 'Poppins', sans-serif;
+            resize: none;
+            overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+            transition: border-color 0.2s;
+            height: 50px;
+            line-height: 1.5;
+            box-sizing: border-box; /* Ensure padding is included in width */
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--whatsapp-send-btn);
+        }
+
+        .send-btn-round {
+            background-color: var(--whatsapp-send-btn);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(0, 168, 132, 0.3);
+            flex-shrink: 0;
+        }
+
+        .send-btn-round:hover {
+            background-color: var(--whatsapp-send-btn-hover);
+            transform: scale(1.05);
+        }
+
+        .send-btn-round i {
+            margin-left: -2px; /* slight visual alignment */
+        }
+
+        @media (min-width: 768px) {
+            .send-bar-container {
+                width: 100%;
+                left: 0;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .send-form-inner {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .pill-select-container {
+                justify-content: space-between;
+            }
+            .pill-select {
+                flex: 1;
+            }
+            .chat-input-wrapper {
+                display: flex;
+                gap: 0.5rem;
+            }
+            .chat-input {
+                flex-grow: 1;
+            }
+            .send-bar-container {
+                padding: 1rem;
+            }
+            .notifications-wrapper {
+                padding-bottom: 150px; /* More room on mobile */
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="notifications-wrapper">
+    
+    <h2 class="section-title"><i class="fas fa-bell"></i> Notifications</h2>
+    
+    <div id="full-notification-list" class="notif-feed-container">
+        <div class="empty-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading your notifications...</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- WhatsApp-style Send Bar (Teachers & Admins Only) -->
+{% if session.user.role in ['teacher', 'admin'] %}
+<div class="send-bar-container">
+    <form method="POST" action="{{ url_for('notifications_page') }}" class="send-form-inner">
+        
+        <div class="pill-select-container">
+            <select id="target_batch" name="target_batch" class="pill-select" required title="Target Batch">
+                <option value="ALL">🎯 All Batches</option>
+                <option value="b1">B1 (1st Yr)</option>
+                <option value="b2">B2 (2nd Yr)</option>
+                <option value="b3">B3 (3rd Yr)</option>
+                <option value="b4">B4 (4th Yr)</option>
+                {% if session.user.is_hod or session.user.role == 'admin' %}
+                <option value="TEACHERS">👨‍🏫 All Teachers</option>
+                {% endif %}
+            </select>
+            
+            <select id="target_department" name="target_department" class="pill-select" required title="Target Department">
+                <option value="ALL">🏢 All Depts</option>
+                <option value="Computer Science">CS</option>
+                <option value="Electronics">ECE</option>
+                <option value="Electrical">EEE</option>
+                <option value="Mechanical">ME</option>
+                <option value="Civil">CE</option>
+            </select>
+        </div>
+        
+        <div class="chat-input-wrapper">
+            <input type="text" id="message" name="message" class="chat-input" placeholder="Type a message..." required autocomplete="off">
+            <button type="submit" class="send-btn-round" title="Send Notification">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+        
+    </form>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const listContainer = document.getElementById('full-notification-list');
+            
+            // Array of color classes to apply randomly
+            const colorClasses = ['card-bg-1', 'card-bg-2', 'card-bg-3', 'card-bg-4', 'card-bg-5'];
+
+            function fetchFullNotifications() {
+                fetch('/api/notifications')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.error) {
+                            listContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error loading notifications.</p></div>`;
+                            return;
+                        }
+                        
+                        const notifications = data.notifications || [];
+                        
+                        if (notifications.length === 0) {
+                            listContainer.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><p>You're all caught up!</p></div>`;
+                            return;
+                        }
+                        
+                        listContainer.innerHTML = '';
+                        notifications.forEach((n, index) => {
+                            const dateObj = new Date(n.created_at);
+                            const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                            
+                            // Pick a semi-random color based on the ID or index to keep it consistent per notification
+                            const colorClass = colorClasses[n.id % colorClasses.length];
+
+                            const card = document.createElement('div');
+                            card.className = `notif-feed-item ${colorClass} ${n.is_read ? '' : 'unread'}`;
+                            
+                            // If the message is long, it naturally spans more space. Grid handles the rest.
+                            card.innerHTML = `
+                                <div class="notif-header">
+                                    <span class="notif-sender"><i class="fas fa-user-circle"></i> ${n.sender_name}</span>
+                                    <span class="notif-date">${formattedDate}</span>
+                                </div>
+                                <div class="notif-message">${n.message}</div>
+                            `;
+                            
+                            // Mark as read on click
+                            card.addEventListener('click', function() {
+                                if (!n.is_read) {
+                                    fetch('/api/notifications/read', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ notification_id: n.id })
+                                    }).then(res => {
+                                        if (res.ok) {
+                                            card.classList.remove('unread');
+                                            n.is_read = true;
+                                            // Update the nav badge if it exists
+                                            const badge = document.getElementById('notification-badge');
+                                            if (badge) {
+                                                let count = parseInt(badge.textContent);
+                                                if (count > 0) {
+                                                    count--;
+                                                    badge.textContent = count;
+                                                    if (count === 0) badge.style.display = 'none';
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                            
+                            listContainer.appendChild(card);
+                        });
+                    })
+                    .catch(err => {
+                        console.error("Error fetching notifications:", err);
+                        listContainer.innerHTML = `<div class="empty-state"><i class="fas fa-wifi"></i><p>Network error. Failed to load notifications.</p></div>`;
+                    });
+            }
+
+            // Initial fetch
+            fetchFullNotifications();
+            // Polling every 60 seconds
+            setInterval(fetchFullNotifications, 60000);
+        });
+    </script>
+{% endblock %}

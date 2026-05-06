@@ -1,0 +1,569 @@
+{% extends "layout.html" %}
+
+{% block title %}Teacher Portal — Student Performance{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+    <style>
+        /* Light theme variables from layout.html */
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --transition-speed: 0.5s;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .teacher-header {
+            background: var(--secondary-bg);
+            border: 1px solid #e0e0e0;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .teacher-header h1 {
+            font-size: 1.5rem;
+            color: var(--text-color);
+        }
+
+        .teacher-header p {
+            font-size: 1rem;
+            color: var(--subtle-text);
+            margin-top: 0.25rem;
+        }
+
+        .teacher-header .chip {
+            background: var(--accent-end);
+            color: white;
+            border-radius: 2rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 1rem;
+            min-height: 2.5rem;
+        }
+
+        .controls-wrapper {
+            background: var(--secondary-bg);
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            align-items: flex-end;
+        }
+
+        .controls .row {
+            min-width: 200px;
+        }
+
+        .controls label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .controls label i {
+            margin-right: 0.5rem;
+            color: var(--accent-start);
+        }
+
+        .controls select {
+            width: 100%;
+            background: var(--primary-bg);
+            border: 1px solid #ddd;
+            border-radius: 0.75rem;
+            color: var(--text-color);
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-family: 'Poppins', sans-serif;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%236b7a8c' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 16px 12px;
+            padding-right: 2.5rem;
+        }
+
+        .controls select:focus {
+            outline: none;
+            border-color: var(--accent-start);
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .btn {
+            border: 0;
+            border-radius: 2rem;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: 'Poppins', sans-serif;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn i {
+            margin-right: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .btn.primary:hover {
+            box-shadow: 0 6px 20px rgba(0, 135, 197, 0.4);
+        }
+
+        .btn.ghost {
+            background: transparent;
+            color: var(--subtle-text);
+            border: 1px solid #ccc;
+        }
+
+        .btn.ghost:hover {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border-color: #bbb;
+        }
+
+        .btn:disabled {
+            background: #e0e0e0;
+            color: #aaa;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .grid-section {
+            margin-top: 2rem;
+            background: var(--secondary-bg);
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 30px var(--shadow-light);
+        }
+
+        .grid-wrap {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 1rem;
+        }
+
+        .marks-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 600px;
+        }
+
+        .marks-table th,
+        .marks-table td {
+            border: 1px solid #e0e0e0;
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .marks-table th {
+            background: var(--card-bg);
+            font-weight: 600;
+        }
+
+        .roll {
+            font-weight: 700;
+        }
+
+        .student-name {
+            text-align: left;
+        }
+
+        .save-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .status {
+            color: var(--subtle-text);
+            font-weight: 500;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--secondary-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1rem 3rem var(--shadow-heavy);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-message {
+            font-size: 1.2rem;
+            color: var(--text-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <main class="container">
+        <section id="teacherHeader" class="teacher-header">
+            <h1 id="teacherName">Student Performance</h1>
+            <p>Select a semester and subject to view student performance.</p>
+            <div id="subjectChip" class="chip">Select a subject below</div>
+        </section>
+
+        <section class="controls-wrapper">
+            <div class="controls">
+                
+                <!-- Semester Selection -->
+                <div class="row">
+                    <label for="semesterSelect"><i class="fa-solid fa-layer-group"></i> Semester</label>
+                    <select id="semesterSelect">
+                        <option value="">— Select Semester —</option>
+                        <option value="1">Semester 1</option>
+                        <option value="2">Semester 2</option>
+                        <option value="3">Semester 3</option>
+                        <option value="4">Semester 4</option>
+                        <option value="5">Semester 5</option>
+                        <option value="6">Semester 6</option>
+                        <option value="7">Semester 7</option>
+                        <option value="8">Semester 8</option>
+                    </select>
+                </div>
+
+                <!-- Subject Selection -->
+                <div class="row">
+                    <label for="subjectSelect"><i class="fa-solid fa-book"></i> Subject</label>
+                    <select id="subjectSelect" disabled>
+                        <option value="">— Select Semester First —</option>
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <div class="row actions">
+                    <button id="viewPerformanceBtn" class="btn primary" disabled><i class="fa-solid fa-chart-line"></i> View Performance</button>
+                    <button id="clearGridBtn" class="btn ghost"><i class="fa-regular fa-trash-can"></i> Clear</button>
+                </div>
+            </div>
+        </section>
+
+
+        <section id="gridSection" class="grid-section" style="display:none;">
+            <div class="grid-wrap">
+                <table id="marksTable" class="marks-table">
+                    <thead>
+                        <tr>
+                            <th>Roll Number</th>
+                            <th>Student Name</th>
+                            <th>Mid 1 (15)</th>
+                            <th>Mid 2 (15)</th>
+                            <th>End Term (50)</th>
+                            <th>Total (100)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="marksBody"></tbody>
+                </table>
+            </div>
+            <div class="save-bar">
+                <span id="loadStatus" class="status"></span>
+            </div>
+        </section>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script type="module">
+        // Data passed from Flask
+        const SUPABASE_URL = "{{ supabase_url | safe }}";
+        const SUPABASE_KEY = "{{ supabase_key | safe }}";
+        const accessibleCourses = {{ accessible_courses_json | safe }};
+        const marksTables = {{ marks_tables_json | safe }}; // ["marks1", "marks2", "marks3", "marks4"]
+        
+        // Map semester numbers to their corresponding marks tables
+        const MARKS_TABLE_MAP = {
+            1: marksTables[0], // marks1
+            2: marksTables[0], // marks1
+            3: marksTables[1], // marks2
+            4: marksTables[1], // marks2
+            5: marksTables[2], // marks3
+            6: marksTables[2], // marks3
+            7: marksTables[3], // marks4
+            8: marksTables[3]  // marks4
+        };
+        
+        // Map semester numbers to the correct student table (b1, b2, etc.)
+        const STUDENT_TABLE_MAP = {
+            1: "b1",
+            2: "b1",
+            3: "b2",
+            4: "b2",
+            5: "b3",
+            6: "b3",
+            7: "b4",
+            8: "b4"
+        };
+
+        // Initialize Supabase client
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- DOM Elements ---
+        const subjectChipEl = document.getElementById('subjectChip'),
+            semesterSelect = document.getElementById('semesterSelect'),
+            subjectSelect = document.getElementById('subjectSelect'),
+            viewPerformanceBtn = document.getElementById('viewPerformanceBtn'),
+            clearGridBtn = document.getElementById('clearGridBtn'),
+            gridSection = document.getElementById('gridSection'),
+            marksBody = document.getElementById('marksBody'),
+            loadStatus = document.getElementById('loadStatus');
+        
+        // --- State Variables ---
+        let currentSubjectCode = null;
+        let currentSubjectName = null;
+        let currentSemester = null;
+        let currentMarksTable = null;
+        let currentStudentTable = null;
+
+        function createCustomModal(message) {
+            const existingModal = document.querySelector('.custom-modal-overlay');
+            if (existingModal) existingModal.remove();
+
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-overlay custom-modal-overlay';
+            modalOverlay.style.display = 'flex';
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+
+            const messageText = document.createElement('p');
+            messageText.className = 'modal-message';
+            messageText.textContent = message;
+
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.className = 'modal-buttons';
+
+            const okBtn = document.createElement('button');
+            okBtn.textContent = 'OK';
+            okBtn.className = 'btn primary';
+            okBtn.onclick = () => modalOverlay.remove();
+
+            buttonsContainer.appendChild(okBtn);
+            modalContent.appendChild(messageText);
+            modalContent.appendChild(buttonsContainer);
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+        }
+
+        function validateInputs() {
+            viewPerformanceBtn.disabled = !(subjectSelect.value && currentMarksTable);
+        }
+
+        function handleSubjectChange() {
+            const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
+            
+            if (!selectedOption || !selectedOption.value) {
+                currentSubjectCode = null;
+                currentSubjectName = null;
+                currentSemester = null;
+                currentMarksTable = null;
+                currentStudentTable = null;
+                subjectChipEl.textContent = 'Select a subject below';
+            } else {
+                currentSubjectCode = selectedOption.value;
+                currentSubjectName = selectedOption.dataset.name;
+                currentSemester = selectedOption.dataset.semester ? parseInt(selectedOption.dataset.semester, 10) : null;
+                currentMarksTable = currentSemester ? MARKS_TABLE_MAP[currentSemester] : null;
+                currentStudentTable = currentSemester ? STUDENT_TABLE_MAP[currentSemester] : null;
+                
+                subjectChipEl.textContent = `${currentSubjectName} (${currentSubjectCode}) - Sem ${currentSemester}`;
+            }
+            validateInputs();
+        }
+
+        function onSemesterChange() {
+            const selectedSem = semesterSelect.value;
+            subjectSelect.innerHTML = '';
+            
+            if (!selectedSem) {
+                subjectSelect.disabled = true;
+                subjectSelect.appendChild(new Option('— Select Semester First —', ''));
+            } else {
+                const matchingCourses = accessibleCourses.filter(course => course.semester === parseInt(selectedSem, 10));
+
+                if (matchingCourses.length > 0) {
+                    subjectSelect.disabled = false;
+                    subjectSelect.appendChild(new Option('— Select Subject —', ''));
+
+                    matchingCourses.forEach(course => {
+                        let option = new Option(`${course.course_name} (${course.course_code})`, course.course_code);
+                        option.dataset.semester = course.semester;
+                        option.dataset.name = course.course_name;
+                        subjectSelect.appendChild(option);
+                    });
+                } else {
+                    subjectSelect.disabled = true;
+                    subjectSelect.appendChild(new Option('No subjects accessible for this sem', ''));
+                }
+            }
+            handleSubjectChange();
+        }
+
+        async function loadPerformance() {
+            if (!currentSubjectCode || !currentMarksTable || !currentStudentTable) {
+                createCustomModal("Please select a semester and subject.");
+                return;
+            }
+
+            loadStatus.textContent = 'Loading student performance...';
+            viewPerformanceBtn.disabled = true;
+            
+            try {
+                // 1. Fetch students for this batch
+                const { data: studentsData, error: studentsError } = await supabaseClient
+                    .from(currentStudentTable)
+                    .select('roll_no, student_name');
+
+                if (studentsError) throw studentsError;
+                if (!studentsData || studentsData.length === 0) {
+                     throw new Error(`No students found in batch table '${currentStudentTable}'.`);
+                }
+
+                studentsData.sort((a, b) => a.roll_no.localeCompare(b.roll_no));
+                const studentsMap = new Map(studentsData.map(s => [s.roll_no, s.student_name]));
+                const allRollNumbers = studentsData.map(s => s.roll_no);
+                
+                // 2. Fetch marks for this subject
+                const { data: existingMarks, error: marksError } = await supabaseClient
+                    .from(currentMarksTable)
+                    .select(`roll_no, mid1, mid2, endsem, total`)
+                    .eq('subject_code', currentSubjectCode);
+
+                if (marksError) throw marksError;
+                
+                const marksMap = new Map(existingMarks.map(m => [m.roll_no.toLowerCase(), m]));
+                
+                // 3. Build grid
+                marksBody.innerHTML = allRollNumbers.map(rollNumber => {
+                    const studentName = studentsMap.get(rollNumber) || `Student ${rollNumber.slice(-3)}`;
+                    const record = marksMap.get(rollNumber.toLowerCase());
+                    
+                    const mid1 = (record && record.mid1 !== null) ? record.mid1 : '-';
+                    const mid2 = (record && record.mid2 !== null) ? record.mid2 : '-';
+                    const endsem = (record && record.endsem !== null) ? record.endsem : '-';
+                    const total = (record && record.total !== null) ? record.total : '-';
+
+                    return `<tr data-roll="${rollNumber.toLowerCase()}" data-name="${studentName}">
+                                <td><span class="roll">${rollNumber.toUpperCase()}</span></td>
+                                <td class="student-name">${studentName}</td>
+                                <td>${mid1}</td>
+                                <td>${mid2}</td>
+                                <td>${endsem}</td>
+                                <td><strong>${total}</strong></td>
+                            </tr>`;
+                }).join('');
+
+                gridSection.style.display = 'block';
+                loadStatus.textContent = 'Data loaded successfully.';
+
+            } catch (error) {
+                console.error('Error loading performance:', error);
+                loadStatus.textContent = `Error: ${error.message}`;
+                createCustomModal(`Error loading data: ${error.message}`);
+            } finally {
+                viewPerformanceBtn.disabled = false;
+            }
+        }
+
+        // Event Listeners
+        semesterSelect.addEventListener('change', onSemesterChange);
+        subjectSelect.addEventListener('change', handleSubjectChange);
+        viewPerformanceBtn.addEventListener('click', loadPerformance);
+        
+        clearGridBtn.addEventListener('click', () => {
+            semesterSelect.value = "";
+            onSemesterChange();
+            gridSection.style.display = 'none';
+            marksBody.innerHTML = '';
+            loadStatus.textContent = '';
+        });
+    </script>
+{% endblock %}

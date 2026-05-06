@@ -840,8 +840,47 @@ def enter_marks_page():
 @app.route("/teacher/students")
 @login_required(role='teacher')
 def view_student_profiles_page():
-     flash("Student profile view not yet implemented.", "info")
-     return redirect(url_for('index'))
+    user = session.get('user')
+    teacher_username = user.get('username') 
+    is_hod = user.get('is_hod')
+
+    if not teacher_username:
+        flash("Could not identify teacher username. Please log in again.", "danger")
+        return redirect(url_for('login_page'))
+
+    accessible_courses = []
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        if is_hod:
+            # HOD can see all courses
+            params = {'select': 'course_code,course_name,semester,credits', 'order': 'semester.asc,course_name.asc'}
+        else:
+            # Regular teacher sees only their assigned courses
+            params = {'select': 'course_code,course_name,semester,credits', 'assisting_teacher': f'eq.{teacher_username}', 'order': 'semester.asc,course_name.asc'}
+            
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        accessible_courses = response.json()
+        
+        if not accessible_courses and not is_hod:
+             flash(f"You are not currently assigned to any courses. (Checked 'assisting_teacher' column for username: '{teacher_username}').", "warning")
+             
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching courses for teacher {teacher_username}: {e}")
+        flash("Error loading your accessible courses.", "danger")
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        flash("Server configuration error trying to access courses.", "danger")
+        return redirect(url_for('index'))
+
+    return render_template(
+        "teacher_performance.html",
+        user=user,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY,
+        accessible_courses_json=json.dumps(accessible_courses),
+        marks_tables_json=json.dumps(MARKS_TABLES)
+    )
 
 # --- Find the old /admin/attendance route and REPLACE it with this ---
 
@@ -1625,8 +1664,11 @@ def get_notifications():
             # Check if notification applies to user
             applies = False
             if role in ['admin', 'teacher']:
-                # Teachers/admins see their own sent messages or ALL
+                # Teachers/admins see their own sent messages
                 if notif.get('sender_username') == user.get('username'):
+                    applies = True
+                # They also see messages sent to TEACHERS
+                elif role == 'teacher' and notif.get('target_batch') == 'TEACHERS':
                     applies = True
             elif role == 'student':
                 batch_match = notif.get('target_batch') == 'ALL' or notif.get('target_batch') == user.get('batch')
@@ -1680,19 +1722,24 @@ def mark_notification_read():
         return jsonify({'success': False}), 500
 
 
-@app.route("/teacher/notifications/send", methods=["GET", "POST"])
-@login_required(role=['teacher', 'admin'])
-def send_notification_page():
-    """Renders page and handles POST to send a new notification."""
+@app.route("/notifications", methods=["GET", "POST"])
+@login_required()
+def notifications_page():
+    """Renders unified notifications page and handles POST to send a new notification."""
+    user = session.get('user')
+    
     if request.method == "POST":
+        if user.get('role') not in ['teacher', 'admin']:
+            flash("Unauthorized to send notifications.", "danger")
+            return redirect(url_for('notifications_page'))
+
         target_batch = request.form.get("target_batch", "ALL")
         target_department = request.form.get("target_department", "ALL")
         message = request.form.get("message", "").strip()
-        user = session.get('user')
         
         if not message:
             flash("Message cannot be empty.", "danger")
-            return redirect(url_for('send_notification_page'))
+            return redirect(url_for('notifications_page'))
             
         payload = {
             "sender_username": user.get('username'),
@@ -1713,9 +1760,9 @@ def send_notification_page():
             print(f"Error sending notification: {e}")
             flash("Error sending notification.", "danger")
             
-        return redirect(url_for('send_notification_page'))
+        return redirect(url_for('notifications_page'))
         
-    return render_template("send_notification.html")
+    return render_template("notifications.html")
 
 # --- START: BATCH PROMOTION & BACKLOG ROUTES ---
 
