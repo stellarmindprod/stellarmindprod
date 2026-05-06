@@ -962,9 +962,93 @@ def admin_enter_marks_page():
     )
 
 @app.route("/admin/events")
-@login_required(role='admin')
+@login_required()
 def manage_events_page():
-     return render_template("manage_events.html")
+    user = session.get('user')
+    if not (user.get('role') == 'admin' or (user.get('role') == 'teacher' and user.get('is_hod'))):
+        flash('Access denied. Required role: Admin or HOD.', 'danger')
+        return redirect(url_for('index'))
+        
+    events = []
+    try:
+        url = get_supabase_rest_url(EVENTS_TABLE)
+        params = {'select': '*', 'order': 'date.desc'}
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        events = response.json()
+    except Exception as e:
+        print(f"Error fetching events: {e}")
+        flash("Could not load events from the database.", "danger")
+
+    return render_template("manage_events.html", events=events, user=user)
+
+@app.route("/admin/events/add", methods=["POST"])
+@login_required()
+def add_event():
+    user = session.get('user')
+    if not (user.get('role') == 'admin' or (user.get('role') == 'teacher' and user.get('is_hod'))):
+        flash('Access denied. Required role: Admin or HOD.', 'danger')
+        return redirect(url_for('index'))
+
+    name = request.form.get('name', '').strip()
+    date = request.form.get('date', '').strip()
+    time = request.form.get('time', '').strip()
+    description = request.form.get('description', '').strip()
+
+    if not name or not date:
+        flash("Event Name and Date are required.", "danger")
+        return redirect(url_for('manage_events_page'))
+
+    new_event_data = {
+        "name": name,
+        "date": date,
+        "time": time if time else None,
+        "description": description if description else None
+    }
+
+    try:
+        url = get_supabase_rest_url(EVENTS_TABLE)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal'
+        
+        response = requests.post(url, headers=headers, json=new_event_data, timeout=10)
+        response.raise_for_status()
+        
+        if response.status_code == 201:
+            flash(f'Event "{name}" added successfully!', 'success')
+        else:
+            flash(f'Received unexpected status: {response.status_code}', 'warning')
+            
+    except Exception as e:
+        print(f"Error adding event: {e}")
+        flash("An error occurred while adding the event.", "danger")
+
+    return redirect(url_for('manage_events_page'))
+
+@app.route("/admin/events/delete/<int:event_id>", methods=["POST"])
+@login_required()
+def delete_event(event_id):
+    user = session.get('user')
+    if not (user.get('role') == 'admin' or (user.get('role') == 'teacher' and user.get('is_hod'))):
+        flash('Access denied. Required role: Admin or HOD.', 'danger')
+        return redirect(url_for('index'))
+
+    try:
+        url = get_supabase_rest_url(EVENTS_TABLE)
+        params = {'id': f'eq.{event_id}'}
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal'
+
+        response = requests.delete(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        flash("Event deleted successfully.", "success")
+        
+    except Exception as e:
+        print(f"Error deleting event: {e}")
+        flash("An error occurred while deleting the event.", "danger")
+
+    return redirect(url_for('manage_events_page'))
 
 @app.route("/admin/dashboard")
 @login_required(role='admin')
@@ -2861,7 +2945,11 @@ def api_hod_assign_subject():
 # --- Generic Management API ---
 
 @app.route("/api/events/add", methods=["POST"])
+@login_required()
 def api_add_event():
+    user = session.get('user')
+    if not (user.get('role') == 'admin' or (user.get('role') == 'teacher' and user.get('is_hod'))):
+        return jsonify({"success": False, "message": "Access denied"}), 403
     data = request.json
     # {date, description}
     try:

@@ -959,9 +959,12 @@
             {% if session.user.role == 'admin' %}
             <li><a href="{{ url_for('admin_hostel_management') }}"><i class="fas fa-hotel"></i> Hostel Management</a></li>
             {% endif %}
+            
+            {% if session.user.role == 'admin' or (session.user.role == 'teacher' and session.user.is_hod) %}
             <li id="event-management-link">
                 <a href="{{ url_for('manage_events_page') }}"><i class="fas fa-calendar-alt"></i> Event Management</a>
             </li>
+            {% endif %}
 
             {% endif %}
 
