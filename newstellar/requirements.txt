@@ -1,12 +1,5 @@
-<<<<<<< HEAD
 Flask>=2.0
 requests>=2.20
 Werkzeug>=2.0 # For password hashing
 
-=======
-Flask>=2.0
-requests>=2.20
-Werkzeug>=2.0 # For password hashing
-
->>>>>>> 3a23115 (cleaning UI)
 Add other dependencies like gunicorn for production
