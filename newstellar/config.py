@@ -3,17 +3,17 @@
 # --- Supabase Configuration ---
 # Replace with your NEW Supabase project credentials.
 # IMPORTANT: Use environment variables in production!
-SUPABASE_URL = "https://xhemdlzqermutpdqetkz.supabase.co" # Your NEW project URL
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoZW1kbHpxZXJtdXRwZHFldGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MTQ2NjAsImV4cCI6MjA3NjE5MDY2MH0.VBdCOBCHcSkfe88g-QKxUuh-Tn3x1AIwM2xJvHxstoY" # Your NEW project Anon Key
+SUPABASE_URL = "https://tydclxmzybbflmgxfpwh.supabase.co" # Your NEW project URL
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR5ZGNseG16eWJiZmxtZ3hmcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjA5MjUsImV4cCI6MjA5MTI5NjkyNX0.ZeEOawsnRhyERWjY9y8u05OvRHaoqqvR7Te0KilcVio" # Your NEW project Anon Key
 # It's generally better practice to use the SERVICE_ROLE_KEY for backend operations,
 # but using ANON_KEY with appropriate RLS (Row Level Security) is also possible.
 # Ensure your RLS policies allow the necessary backend operations.
-SUPABASE_SERVICE_KEY = "YOUR_NEW_SUPABASE_SERVICE_ROLE_KEY" # Keep this secret!
+SUPABASE_SERVICE_KEY = "sb_secret_Ws613bJqEKwJWs_EO2vPmg_vlHTpEIQ" # Keep this secret!
 
 # --- Database Table Names (Based on your provided SQL) ---
 STUDENT_TABLES = ["b1", "b2", "b3", "b4"]
 TEACHER_TABLE = "teachers"
-ADMIN_TABLE = "admins" # Assumed table name for administrators
+ADMIN_TABLE = "admin" # Assumed table name for administrators
 COURSE_TABLE = "courses"
 GRADES_TABLE = "grades"
 BACKLOG_TABLE = "backlogs"
@@ -26,6 +26,9 @@ EVENTS_TABLE = "events"
 HOLIDAYS_TABLE = "holidays"
 TIMETABLE_TABLE = "timetables"
 
+# --- Notifications Tables ---
+NOTIFICATIONS_TABLE = "notifications"
+NOTIFICATION_READS_TABLE = "notification_reads"
 # --- Headers for Supabase REST API calls ---
 # Using Anon key - ensure RLS is properly configured if using this.
 SUPABASE_HEADERS = {

@@ -116,6 +116,10 @@
                     <li><a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
                 {% endif %}
 
+                {% if session.user.role == 'student' %}
+                    <li><a href="{{ url_for('student_marks_page') }}"><i class="fas fa-clipboard-check"></i> My Marks</a></li>
+                {% endif %}
+
                 <!-- NEW LINK FOR PARENTS -->
                 {% if session.user.role == 'parent' %}
                     <li><a href="#" id="open-medical-modal-btn" style="color: #4299e1;"><i class="fas fa-file-medical"></i> Upload Certificate</a></li>

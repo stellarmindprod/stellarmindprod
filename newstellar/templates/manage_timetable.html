@@ -80,7 +80,7 @@
         .entry-details { line-height: 1.4; }
         .entry-time { font-weight: 700; color: var(--text-color); }
         .entry-subject { font-weight: 600; color: var(--accent-end); }
-        .entry-venue { color: var(--subtle-text); }
+        .entry-teacher { color: var(--subtle-text); font-style: italic; }
         
         .btn-delete-entry {
             background: #dc3545;
@@ -96,6 +96,29 @@
 {% endblock %}
 
 {% block content %}
+
+<div class="content-card">
+    <h2>Upload Timetable via Excel</h2>
+    <p style="color: var(--subtle-text); margin-bottom: 1rem;">Upload an unstructured Excel timetable. The AI will automatically extract the entries. Please ensure the semester is specified.</p>
+    <form action="{{ url_for('upload_timetable_excel') }}" method="POST" enctype="multipart/form-data">
+        <div class="form-grid" style="align-items: end;">
+            <div class="form-group">
+                <label for="excel_semester">Semester</label>
+                <select id="excel_semester" name="semester" required>
+                    <option value="">— Select —</option>
+                    {% for i in range(1, 9) %}
+                        <option value="{{ i }}">Semester {{ i }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="excel_file">Excel File (.xlsx)</label>
+                <input type="file" id="excel_file" name="excel_file" accept=".xlsx, .xls" required>
+            </div>
+            <button type="submit" class="btn btn-submit">Upload & Process</button>
+        </div>
+    </form>
+</div>
 
 <div class="content-card">
     <h2>Select Semester</h2>
@@ -156,8 +179,8 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="venue">Venue</label>
-                <input type="text" id="venue" name="venue" placeholder="e.g., Shed III">
+                <label for="teacher_name">Teacher Name</label>
+                <input type="text" id="teacher_name" name="teacher_name" placeholder="e.g., Prof. Smith">
             </div>
         </div>
         <button type="submit" class="btn btn-submit" style="margin-top: 1.5rem;">Add Timetable Entry</button>
@@ -177,7 +200,7 @@
                     <div class="entry-details">
                         <div class="entry-time">{{ entry.start_time }} - {{ entry.end_time }}</div>
                         <div class="entry-subject">{{ entry.courses.course_name if entry.courses else entry.subject_code or 'Free Period' }}</div>
-                        <div class="entry-venue">{{ entry.venue or 'N/A' }}</div>
+                        <div class="entry-teacher">{{ entry.teacher_name or 'N/A' }}</div>
                     </div>
                     <form action="{{ url_for('delete_timetable_entry', entry_id=entry.id) }}" method="POST" onsubmit="return confirm('Delete this entry?');">
                         <input type="hidden" name="semester" value="{{ selected_semester }}">

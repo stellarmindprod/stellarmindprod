@@ -237,7 +237,7 @@
     const COURSE_TABLE = "courses"; // Assuming 'courses' is the table name
 
     // --- Initialize Supabase client ---
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // --- Global state ---
     let subjectData = {
@@ -280,7 +280,7 @@
 
         try {
             // Fetch marks
-            const { data: marksData, error: marksError } = await supabase
+            const { data: marksData, error: marksError } = await supabaseClient
                 .from(MARKS_TABLE)
                 .select('subject_code, mid1, mid2, endsem, final_grade')
                 .eq('roll_no', STUDENT_ROLL_NO);
@@ -288,7 +288,7 @@
             if (marksError) throw marksError;
 
             // Fetch course names
-            const { data: coursesData, error: coursesError } = await supabase
+            const { data: coursesData, error: coursesError } = await supabaseClient
                 .from(COURSE_TABLE)
                 .select('course_code, course_name');
             

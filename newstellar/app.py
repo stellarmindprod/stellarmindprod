@@ -1,8 +1,15 @@
 # stellarminprod/app.py
 
+import os
 import requests
 import json
 import datetime # Import datetime
+import pandas as pd
+from pydantic import BaseModel, Field
+from langchain_core.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.output_parsers import JsonOutputParser
+from werkzeug.utils import secure_filename
 from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1367,7 +1374,7 @@ def manage_timetable_page():
             url_tt = get_supabase_rest_url(TIMETABLE_TABLE)
             # Join with courses table to get subject names
             params_tt = {
-                'select': 'id,day_of_week,start_time,end_time,subject_code,venue,courses(course_name)',
+                'select': 'id,day_of_week,start_time,end_time,subject_code,teacher_name',
                 'semester': f'eq.{selected_semester}',
                 'order': 'day_of_week.asc,start_time.asc'
             }
@@ -1403,7 +1410,7 @@ def add_timetable_entry():
         start_time = request.form.get('start_time')
         end_time = request.form.get('end_time')
         subject_code = request.form.get('subject_code') or None # Use None if empty
-        venue = request.form.get('venue') or None
+        teacher_name = request.form.get('teacher_name') or None
 
         if not all([semester, day, start_time, end_time]):
             flash("Semester, Day, Start Time, and End Time are required.", "danger")
@@ -1415,7 +1422,7 @@ def add_timetable_entry():
             "start_time": start_time,
             "end_time": end_time,
             "subject_code": subject_code,
-            "venue": venue
+            "teacher_name": teacher_name
         }
         
         url = get_supabase_rest_url(TIMETABLE_TABLE)
@@ -1456,12 +1463,297 @@ def delete_timetable_entry(entry_id):
 
     return redirect(url_for('manage_timetable_page', semester=semester))
 
+class TimetableEntry(BaseModel):
+    semester: int = Field(description="The semester number (1-8).")
+    day_of_week: str = Field(description="3-letter day abbreviation: MON, TUE, WED, THU, FRI, SAT, SUN")
+    start_time: str = Field(description="Start time in HH:MM format (24-hour). Example: '09:00'")
+    end_time: str = Field(description="End time in HH:MM format (24-hour). Example: '10:00'")
+    subject_code: str = Field(description="Subject code ONLY without parentheses (e.g., 'CS101'). Must not contain teacher initials.")
+    teacher_name: str = Field(description="The teacher initials (e.g., 'JS') or Full Name.")
+
+class TimetableOutput(BaseModel):
+    teacher_legend: dict = Field(description="A dictionary explicitly mapping the teacher abbreviations found in the cells (e.g. 'JS') to their full expanded names found at the bottom legend of the Excel file. Find every single one.")
+    entries: list[TimetableEntry] = Field(description="The array of valid timetable entries.")
+
+@app.route("/admin/timetable/upload", methods=['POST'])
+@login_required(role='admin')
+def upload_timetable_excel():
+    """Handles adding timetable entries via unstructured Excel parsing via Hugging Face LLM."""
+    semester = request.form.get('semester')
+    if not semester:
+        flash("Semester is required for uploading an Excel timetable.", "danger")
+        return redirect(url_for('manage_timetable_page'))
+
+    if 'excel_file' not in request.files:
+        flash("No file part provided.", "danger")
+        return redirect(url_for('manage_timetable_page', semester=semester))
+        
+    file = request.files['excel_file']
+    if file.filename == '':
+        flash("No selected file.", "danger")
+        return redirect(url_for('manage_timetable_page', semester=semester))
+        
+    if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
+        try:
+            # 1. Select the BTECH Excel tab based on the chosen semester
+            xls = pd.ExcelFile(file)
+            target_sheet = xls.sheet_names[0] # Default to the first tab
+            for sn in xls.sheet_names:
+                sn_upper = sn.upper()
+                if str(semester) in sn_upper and "BTECH" in sn_upper:
+                    target_sheet = sn
+                    break
+            
+            df = pd.read_excel(xls, sheet_name=target_sheet)
+            markdown_content = f"--- Data from Excel Tab: {target_sheet} ---\n\n" + df.to_markdown(index=False)
+
+            # 2. Setup LLM Parser
+            parser = JsonOutputParser(pydantic_object=TimetableOutput)
+            
+            prompt_instruction = """You are a highly intelligent data extraction assistant parsing a university timetable from a raw Markdown table.
+Analyze the provided table carefully. It contains timetable entries.
+Crucial Requirements:
+1. Identify the teacher legend at the bottom of the document and map abbreviations clearly in the `teacher_legend` dict object.
+2. Extract every single valid class cell into an object in the `entries` array. Do NOT extract blank or break periods.
+3. Explicitly split data: "CS101 (JS)" means subject_code is "CS101" and teacher_name is "JS".
+4. Assign semester exactly to {semester} for all records.
+
+{format_instructions}
+
+Unstructured Timetable Data:
+{table}"""
+            
+            prompt = PromptTemplate(
+                template=prompt_instruction,
+                input_variables=["semester", "table"],
+                partial_variables={"format_instructions": parser.get_format_instructions()},
+            )
+
+            # 3. Use Gemini Model - Ensure GEMINI_API_KEY is set in environment
+            os.environ["GEMINI_API_KEY"] = "AIzaSyADmnz_FSn_DMh_KucGrEMBEED3hIXsgNI"
+            gemini_token = os.environ.get("GEMINI_API_KEY")
+            if not gemini_token:
+                flash("GEMINI_API_KEY environment variable not set. Please expose it in your running environment to use AI upload.", "danger")
+                return redirect(url_for('manage_timetable_page', semester=semester))
+            
+            chat_model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.01)
+            
+            chain = prompt | chat_model | parser
+            output_obj = chain.invoke({"semester": semester, "table": markdown_content})
+            
+            # 4. Filter and process
+            teacher_legend = output_obj.get("teacher_legend", {})
+            structured_entries = output_obj.get("entries", [])
+            if not isinstance(structured_entries, list):
+                structured_entries = [structured_entries]
+
+            import pprint
+            print("\n-------------- RAW AI JSON EXTRACTION --------------")
+            pprint.pprint(output_obj)
+            print("----------------------------------------------------\n")
+
+            if len(structured_entries) > 0:
+                print(f"Purging existing timetable records for Semester {semester}...")
+                del_url = get_supabase_rest_url(TIMETABLE_TABLE)
+                del_headers = SUPABASE_HEADERS.copy()
+                requests.delete(del_url, headers=del_headers, params={'semester': f'eq.{semester}'}, timeout=10)
+
+            print(f"AI Extraction produced {len(structured_entries)} items. Attempting DB insertion...")
+            success_count = 0
+            error_msg = ""
+            for i, entry in enumerate(structured_entries):
+                try:
+                    start_time = entry.get('start_time')
+                    end_time = entry.get('end_time')
+                    day_of_week = entry.get('day_of_week', '').upper()[:3]
+                    
+                    if not start_time or not end_time or not day_of_week:
+                        print(f"Skipping Entry {i+1} due to missing required fields (Time/Day):", entry)
+                        continue
+                        
+                    # Scrub subject_code to prevent Foreign Key constraints from crashing
+                    subject_code = entry.get('subject_code')
+                    if subject_code:
+                        subject_code_upper = subject_code.upper().strip()
+                        if "BREAK" in subject_code_upper or "LUNCH" in subject_code_upper or "RECESS" in subject_code_upper:
+                            subject_code = None
+
+                    raw_teacher = entry.get('teacher_name') or ''
+                    mapped_teacher = teacher_legend.get(raw_teacher.strip(), raw_teacher) if raw_teacher else None
+
+                    new_entry = {
+                        "semester": int(entry.get('semester', semester)),
+                        "day_of_week": day_of_week,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "subject_code": subject_code,
+                        "teacher_name": mapped_teacher
+                    }
+                    print(f"Inserting Entry {i+1}:", new_entry)
+                    url = get_supabase_rest_url(TIMETABLE_TABLE)
+                    headers = SUPABASE_HEADERS.copy()
+                    headers['Prefer'] = 'return=minimal'
+                    resp = requests.post(url, headers=headers, json=new_entry, timeout=10)
+                    if resp.status_code == 201:
+                        success_count += 1
+                    else:
+                        print(f"DB Insert Failed! Status {resp.status_code}: {resp.text}")
+                        error_msg = f"DB Status {resp.status_code}: {resp.text}"
+                except Exception as ex:
+                    print(f"Skipping badly formatted entry {entry}: {ex}")
+
+            if success_count > 0:
+                flash(f"Successfully processed and added {success_count} timetable entries.", "success")
+            else:
+                flash(f"Failed to add entries. AI found {len(structured_entries)} items but DB rejected them: {error_msg}", "danger")
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error parsing or uploading Excel:\n{error_details}")
+            # Identify if it's an OutputParserException (empty response)
+            err_name = type(e).__name__
+            flash(f"Error processing Excel using AI ({err_name}): {str(e)[:150]}", "danger")
+    else:
+        flash("Invalid file type. Please upload a .xlsx or .xls file.", "danger")
+
+    return redirect(url_for('manage_timetable_page', semester=semester))
+
 @app.route("/admin/events")
 @login_required(role='admin')
 def manage_events_page():
-     flash("Event management not yet implemented.", "info")
-     return redirect(url_for('index'))
+     return render_template("manage_events.html")
 
+
+# --- START: NOTIFICATION ROUTES ---
+
+@app.route("/api/notifications", methods=["GET"])
+@login_required()
+def get_notifications():
+    """Fetches notifications for the logged-in user and calculates unread count."""
+    user = session.get('user')
+    role = user.get('role')
+    
+    if role not in ['student', 'teacher', 'admin']:
+        return jsonify({'notifications': [], 'unread_count': 0})
+        
+    try:
+        # Get all notifications (we'll filter in Python for simplicity, though DB filtering is better for large datasets)
+        url_notif = get_supabase_rest_url(NOTIFICATIONS_TABLE)
+        # Order by created_at descending
+        params_notif = {'select': '*', 'order': 'created_at.desc'}
+        resp_notif = requests.get(url_notif, headers=SUPABASE_HEADERS, params=params_notif, timeout=5)
+        resp_notif.raise_for_status()
+        all_notifications = resp_notif.json()
+        
+        # Get reads for this specific user
+        user_id_for_reads = user.get('roll_no') if role == 'student' else user.get('username')
+        
+        url_reads = get_supabase_rest_url(NOTIFICATION_READS_TABLE)
+        params_reads = {'select': 'notification_id', 'roll_no': f'eq.{user_id_for_reads}'}
+        resp_reads = requests.get(url_reads, headers=SUPABASE_HEADERS, params=params_reads, timeout=5)
+        resp_reads.raise_for_status()
+        read_notifications = {item['notification_id'] for item in resp_reads.json()}
+        
+        filtered_notifications = []
+        unread_count = 0
+        
+        for notif in all_notifications:
+            # Check if notification applies to user
+            applies = False
+            if role in ['admin', 'teacher']:
+                # Teachers/admins see their own sent messages or ALL
+                if notif.get('sender_username') == user.get('username'):
+                    applies = True
+            elif role == 'student':
+                batch_match = notif.get('target_batch') == 'ALL' or notif.get('target_batch') == user.get('batch')
+                dept_match = notif.get('target_department') == 'ALL' or notif.get('target_department') == user.get('department')
+                if batch_match and dept_match:
+                    applies = True
+                    
+            if applies:
+                is_read = notif['id'] in read_notifications
+                notif['is_read'] = is_read
+                if not is_read:
+                    unread_count += 1
+                filtered_notifications.append(notif)
+                
+        return jsonify({'notifications': filtered_notifications, 'unread_count': unread_count})
+
+    except Exception as e:
+        print(f"Error fetching notifications: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/notifications/read", methods=["POST"])
+@login_required()
+def mark_notification_read():
+    """Marks a notification as read by the user."""
+    data = request.json
+    notification_id = data.get('notification_id')
+    user = session.get('user')
+    user_id_for_reads = user.get('roll_no') if user.get('role') == 'student' else user.get('username')
+    
+    if not notification_id or not user_id_for_reads:
+        return jsonify({'success': False}), 400
+        
+    try:
+        url = get_supabase_rest_url(NOTIFICATION_READS_TABLE)
+        # Attempt to insert, ignore if already exists (depends on DB constraints, but we have UNIQUE on notification_id + roll_no)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal'
+        payload = {
+            'notification_id': notification_id,
+            'roll_no': user_id_for_reads
+        }
+        res = requests.post(url, headers=headers, json=payload, timeout=5)
+        # 409 means it already exists, which is fine (already read)
+        if res.status_code not in [201, 409]:
+            res.raise_for_status()
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error marking notification read: {e}")
+        return jsonify({'success': False}), 500
+
+
+@app.route("/teacher/notifications/send", methods=["GET", "POST"])
+@login_required(role=['teacher', 'admin'])
+def send_notification_page():
+    """Renders page and handles POST to send a new notification."""
+    if request.method == "POST":
+        target_batch = request.form.get("target_batch", "ALL")
+        target_department = request.form.get("target_department", "ALL")
+        message = request.form.get("message", "").strip()
+        user = session.get('user')
+        
+        if not message:
+            flash("Message cannot be empty.", "danger")
+            return redirect(url_for('send_notification_page'))
+            
+        payload = {
+            "sender_username": user.get('username'),
+            "sender_name": user.get('teacher_name') or user.get('name') or user.get('username'),
+            "message": message,
+            "target_batch": target_batch,
+            "target_department": target_department
+        }
+        
+        try:
+            url = get_supabase_rest_url(NOTIFICATIONS_TABLE)
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'return=minimal'
+            res = requests.post(url, headers=headers, json=payload, timeout=5)
+            res.raise_for_status()
+            flash("Notification sent successfully!", "success")
+        except Exception as e:
+            print(f"Error sending notification: {e}")
+            flash("Error sending notification.", "danger")
+            
+        return redirect(url_for('send_notification_page'))
+        
+    return render_template("send_notification.html")
+
+# --- END: NOTIFICATION ROUTES ---
 
 # --- Error Handling ---
 @app.errorhandler(404)
