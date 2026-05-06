@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gate Pass - {{ gate_pass.id }}</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; }
+        .pass-container {
+            border: 2px solid #000;
+            padding: 30px;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+            background: #fff;
+        }
+        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; }
+        .header p { margin: 5px 0; font-weight: bold; }
+        .info-row { display: flex; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; }
+        .label { width: 150px; font-weight: bold; }
+        .value { flex: 1; }
+        .footer { margin-top: 50px; display: flex; justify-content: space-between; }
+        .signature { text-align: center; width: 200px; border-top: 1px solid #000; padding-top: 5px; }
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 80px;
+            color: rgba(0, 0, 0, 0.05);
+            pointer-events: none;
+            z-index: 0;
+            text-transform: uppercase;
+        }
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+            .pass-container { border: 2px solid #000; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+        <button onclick="window.print()" style="padding: 10px 20px; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 5px;">Print Gate Pass</button>
+        <button onclick="window.history.back()" style="padding: 10px 20px; cursor: pointer; background: #7f8c8d; color: white; border: none; border-radius: 5px;">Back</button>
+    </div>
+
+    <div class="pass-container">
+        <div class="watermark">Approved</div>
+        <div class="header">
+            <h1>Hostel Gate Pass</h1>
+            <p>StellarMind Academic Institution</p>
+        </div>
+
+        <div class="info-row">
+            <span class="label">Pass ID:</span>
+            <span class="value">#GP-{{ gate_pass.id }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Student Name:</span>
+            <span class="value">{{ user.student_name }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Roll Number:</span>
+            <span class="value">{{ gate_pass.roll_no | upper }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Hostel:</span>
+            <span class="value">{{ gate_pass.hostel_name }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Out Date/Time:</span>
+            <span class="value">{{ gate_pass.out_date }} at {{ gate_pass.out_time }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Expected In:</span>
+            <span class="value">{{ gate_pass.in_date or 'N/A' }} at {{ gate_pass.in_time or 'N/A' }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Reason:</span>
+            <span class="value">{{ gate_pass.reason }}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">Status:</span>
+            <span class="value" style="color: green; font-weight: bold;">{{ gate_pass.status | upper }}</span>
+        </div>
+
+        <div class="footer">
+            <div class="signature">Student Signature</div>
+            <div class="signature">
+                {{ warden_name }}<br>
+                (Warden Signature)
+            </div>
+        </div>
+        
+        <p style="font-size: 10px; text-align: center; margin-top: 20px; color: #7f8c8d;">
+            Generated on {{ gate_pass.approved_at }}
+        </p>
+    </div>
+</body>
+</html>

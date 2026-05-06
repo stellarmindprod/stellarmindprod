@@ -1,0 +1,264 @@
+{% extends "layout.html" %}
+
+{% block title %}Manage Attendance - {{ department }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <style>
+        :root {
+            --accent-color: #10b981;
+            --accent-hover: #059669;
+        }
+        .content-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-weight: 600; margin-bottom: 0.5rem; color: #64748b; }
+        .form-group select, .form-group input { padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+        
+        .att-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .att-table th, .att-table td { border: 1px solid #e2e8f0; padding: 0.75rem; text-align: center; }
+        .att-table th { background: #f8fafc; font-weight: 600; }
+        
+        .btn-action {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-action:hover { background-color: var(--accent-hover); }
+        .btn-action:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+        .status-input {
+            width: 80px;
+            padding: 0.4rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <h2>Manage Attendance - {{ department }}</h2>
+    
+    <div class="controls">
+        <div class="form-group">
+            <label for="semesterSelect">Semester</label>
+            <select id="semesterSelect">
+                <option value="">-- Select Semester --</option>
+                {% for i in range(1, 9) %}
+                <option value="{{ i }}">Semester {{ i }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="subjectSelect">Subject</label>
+            <select id="subjectSelect" disabled>
+                <option value="">-- Select Semester First --</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="attDate">Date</label>
+            <input type="date" id="attDate">
+        </div>
+        <div class="form-group">
+            <label for="totalClasses">Total Classes</label>
+            <input type="number" id="totalClasses" value="1" min="1">
+        </div>
+        <div class="form-group" style="justify-content: flex-end;">
+            <button id="loadBtn" class="btn-action">Load Attendance</button>
+        </div>
+    </div>
+
+    <div id="gridSection" style="display: none;">
+        <table class="att-table">
+            <thead>
+                <tr>
+                    <th>Roll No</th>
+                    <th>Name</th>
+                    <th>Present Count</th>
+                </tr>
+            </thead>
+            <tbody id="attBody"></tbody>
+        </table>
+        <div style="margin-top: 1.5rem; text-align: right;">
+            <button id="saveBtn" class="btn-action">Save Attendance</button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const department = "{{ department }}";
+    const supabaseUrl = "{{ supabase_url }}";
+    const supabaseKey = "{{ supabase_key }}";
+    const supabase = supabasejs.createClient(supabaseUrl, supabaseKey);
+
+    const semSelect = document.getElementById('semesterSelect');
+    const subSelect = document.getElementById('subjectSelect');
+    const attDate = document.getElementById('attDate');
+    const totalClassesInput = document.getElementById('totalClasses');
+    const loadBtn = document.getElementById('loadBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const attBody = document.getElementById('attBody');
+    const gridSection = document.getElementById('gridSection');
+
+    const attTables = {{ attendance_tables_json | safe }};
+    const ATT_TABLE_MAP = {
+        1: attTables[0], 2: attTables[0],
+        3: attTables[1], 4: attTables[1],
+        5: attTables[2], 6: attTables[2],
+        7: attTables[3], 8: attTables[3]
+    };
+    const BATCH_MAP = {
+        1: 'b1', 2: 'b1',
+        3: 'b2', 4: 'b2',
+        5: 'b3', 6: 'b3',
+        7: 'b4', 8: 'b4'
+    };
+
+    // Set today as default date
+    attDate.value = new Date().toISOString().split('T')[0];
+
+    semSelect.addEventListener('change', async () => {
+        const sem = semSelect.value;
+        subSelect.innerHTML = '<option value="">-- Loading --</option>';
+        subSelect.disabled = true;
+        gridSection.style.display = 'none';
+
+        if (!sem) return;
+
+        const { data, error } = await supabase
+            .from('courses')
+            .select('*')
+            .eq('department', department)
+            .eq('semester', sem);
+
+        if (error) {
+            alert("Error: " + error.message);
+            return;
+        }
+
+        subSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+        data.forEach(c => {
+            subSelect.innerHTML += `<option value="${c.course_code}">${c.course_name} (${c.course_code})</option>`;
+        });
+        subSelect.disabled = false;
+    });
+
+    loadBtn.addEventListener('click', async () => {
+        const sem = semSelect.value;
+        const sub = subSelect.value;
+        const date = attDate.value;
+
+        if (!sem || !sub || !date) return alert("Select all filters");
+
+        loadBtn.disabled = true;
+        loadBtn.textContent = "Loading...";
+
+        try {
+            const batch = BATCH_MAP[sem];
+            const attTable = ATT_TABLE_MAP[sem];
+
+            const { data: students, error: sErr } = await supabase.from(batch).select('roll_no, student_name').order('roll_no');
+            if (sErr) throw sErr;
+
+            const { data: existing, error: eErr } = await supabase.from(attTable).select('*').eq('subject_code', sub).eq('date', date);
+            if (eErr) throw eErr;
+
+            const attMap = new Map(existing.map(a => [a.roll_no.toLowerCase(), a]));
+
+            if (existing.length > 0) {
+                totalClassesInput.value = existing[0].total_classes;
+            }
+
+            attBody.innerHTML = '';
+            students.forEach(s => {
+                const record = attMap.get(s.roll_no.toLowerCase());
+                const val = record ? record.status : totalClassesInput.value;
+                attBody.innerHTML += `
+                    <tr data-roll="${s.roll_no}">
+                        <td>${s.roll_no.toUpperCase()}</td>
+                        <td style="text-align: left;">${s.student_name}</td>
+                        <td><input type="number" class="status-input" value="${val}" min="0" max="${totalClassesInput.value}"></td>
+                    </tr>
+                `;
+            });
+
+            gridSection.style.display = 'block';
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            loadBtn.disabled = false;
+            loadBtn.textContent = "Load Attendance";
+        }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        const sem = semSelect.value;
+        const sub = subSelect.value;
+        const date = attDate.value;
+        const total = parseInt(totalClassesInput.value);
+        const table = ATT_TABLE_MAP[sem];
+        const subName = subSelect.options[subSelect.selectedIndex].text.split(' (')[0];
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
+
+        const rows = attBody.querySelectorAll('tr');
+        const payloads = [];
+
+        rows.forEach(row => {
+            const roll = row.dataset.roll;
+            const val = parseInt(row.querySelector('input').value);
+            payloads.push({
+                roll_no: roll.toLowerCase(),
+                subject_code: sub,
+                subject_name: subName,
+                date: date,
+                status: val,
+                total_classes: total
+            });
+        });
+
+        // Delete existing for this date/subject first to avoid conflicts if roll_no is not part of PK
+        // But usually it's easier to just upsert if schema allows.
+        // Let's try upserting.
+        const { error } = await supabase.from(table).upsert(payloads, { onConflict: 'roll_no,subject_code,date' });
+
+        if (error) {
+            // If upsert fails due to missing unique constraint, we delete and insert
+            const { error: delErr } = await supabase.from(table).delete().eq('subject_code', sub).eq('date', date);
+            if (!delErr) {
+                const { error: insErr } = await supabase.from(table).insert(payloads);
+                if (insErr) alert("Save failed: " + insErr.message);
+                else alert("Attendance saved successfully!");
+            } else {
+                alert("Delete existing failed: " + delErr.message);
+            }
+        } else {
+            alert("Attendance saved successfully!");
+        }
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save Attendance";
+    });
+});
+</script>
+{% endblock %}

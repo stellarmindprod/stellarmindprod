@@ -12,12 +12,15 @@ SUPABASE_SERVICE_KEY = "sb_secret_Ws613bJqEKwJWs_EO2vPmg_vlHTpEIQ" # Keep this s
 
 # --- Database Table Names (Based on your provided SQL) ---
 STUDENT_TABLES = ["b1", "b2", "b3", "b4"]
+ALUMNI_TABLE = "alumni"
+ALL_STUDENT_TABLES = ["b1", "b2", "b3", "b4", "alumni"]  # Includes alumni for login search
 TEACHER_TABLE = "teachers"
 ADMIN_TABLE = "admin" # Assumed table name for administrators
 COURSE_TABLE = "courses"
 GRADES_TABLE = "grades"
 BACKLOG_TABLE = "backlogs"
 MARKS_TABLES = ["marks1", "marks2", "marks3", "marks4"]
+EVEN_MARKS_TABLES = ["marks1e", "marks2e", "marks3e", "marks4e"]
 ATTENDANCE_TABLES = ["attendance1", "attendance2", "attendance3", "attendance4"] # For batch-specific attendance
 
 # Assumed table names based on old project files (add these to your DB)
@@ -26,9 +29,21 @@ EVENTS_TABLE = "events"
 HOLIDAYS_TABLE = "holidays"
 TIMETABLE_TABLE = "timetables"
 
+# --- Batch Promotion Tables ---
+PROMOTION_LOG_TABLE = "promotion_log"
+YEAR_BACK_TABLE = "year_back_students"
+
 # --- Notifications Tables ---
 NOTIFICATIONS_TABLE = "notifications"
 NOTIFICATION_READS_TABLE = "notification_reads"
+
+# --- Hostel & Warden Tables ---
+HOSTELS_TABLE = "hostels"
+WARDENS_TABLE = "wardens"
+HOSTEL_ASSIGNMENTS_TABLE = "hostel_assignments"
+HOSTEL_COMPLAINTS_TABLE = "hostel_complaints"
+GATE_PASSES_TABLE = "gate_passes"
+
 # --- Headers for Supabase REST API calls ---
 # Using Anon key - ensure RLS is properly configured if using this.
 SUPABASE_HEADERS = {

@@ -161,6 +161,21 @@
                 <label for="teacher_email">Email</label>
                 <input type="email" id="teacher_email" name="teacher_email" placeholder="e.g., jsmith@nitsikkim.ac.in" required>
             </div>
+            <div class="form-group">
+                <label for="teacher_phone">Phone Number</label>
+                <input type="text" id="teacher_phone" name="teacher_phone" placeholder="e.g., +91 9876543210">
+            </div>
+            <div class="form-group">
+                <label for="is_hod">Is HOD?</label>
+                <select id="is_hod" name="is_hod">
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                </select>
+            </div>
+            <div class="form-group" id="hod_dept_group" style="display: none;">
+                <label for="hod_department">HOD Department</label>
+                <input type="text" id="hod_department" name="hod_department" placeholder="e.g., Computer Science">
+            </div>
             <button type="submit" class="btn btn-submit">Add Teacher</button>
         </form>
     </div>
@@ -203,6 +218,8 @@
                 <th>Full Name</th>
                 <th>Department</th>
                 <th>Email</th>
+                <th>Phone</th>
+                <th>HOD Status</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -213,6 +230,16 @@
                 <td>{{ teacher.teacher_name }}</td>
                 <td>{{ teacher.department or 'N/A' }}</td>
                 <td>{{ teacher.teacher_email }}</td>
+                <td>{{ teacher.teacher_phone or 'N/A' }}</td>
+                <td>
+                    {% if teacher.is_hod %}
+                        <span class="badge" style="background: #10b981; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">
+                            {{ teacher.hod_department }}
+                        </span>
+                    {% else %}
+                        <span style="color: #94a3b8; font-size: 0.8rem;">No</span>
+                    {% endif %}
+                </td>
                 <td>
                     <div class="table-actions">
                         <a href="{{ url_for('edit_teacher_page', teacher_id=teacher.teacher_id) }}" class="btn btn-secondary">Edit</a>
@@ -338,6 +365,15 @@
                 usernameSearch.value = searchUser;
                 nameSearch.value = searchUser;
                 hasSearchValue = true;
+            }
+
+            // --- HOD Toggle Logic ---
+            const isHodSelect = document.getElementById('is_hod');
+            const hodDeptGroup = document.getElementById('hod_dept_group');
+            if (isHodSelect) {
+                isHodSelect.addEventListener('change', function() {
+                    hodDeptGroup.style.display = this.value === 'true' ? 'block' : 'none';
+                });
             }
 
             // Show search form if a search was performed

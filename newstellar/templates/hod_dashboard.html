@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+
+{% block title %}HOD Dashboard - {{ department }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #10b981; 
+            --accent-end: #059669;
+            --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+
+        .hod-hero {
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+
+        .hod-hero h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        .hod-hero .hod-gradient {
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hod-hero p {
+            font-size: 1.1rem;
+            color: var(--subtle-text);
+            margin-top: 0.5rem;
+        }
+
+        .hod-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding: 1rem;
+            max-width: 1200px;
+            margin: 1rem auto;
+        }
+
+        .hod-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            text-decoration: none;
+            color: var(--text-color);
+            box-shadow: var(--shadow-base);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .hod-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--accent-end);
+        }
+
+        .hod-card i {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--accent-end);
+        }
+
+        .hod-card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            text-align: center;
+            color: var(--accent-end);
+        }
+
+        .department-badge {
+            background-color: var(--accent-start);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 0.5rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="hod-hero">
+    <h1>Welcome, <span class="hod-gradient">{{ user.teacher_name }}</span>!</h1>
+    <div class="department-badge">HOD of {{ department }}</div>
+    <p>Departmental Management Portal</p>
+</div>
+
+<div class="hod-grid">
+    <a href="{{ url_for('hod_assign_subject') }}" class="hod-card">
+        <i class="fas fa-book-reader"></i>
+        <h2>Assign Subjects</h2>
+    </a>
+
+    <a href="{{ url_for('hod_manage_marks') }}" class="hod-card">
+        <i class="fas fa-file-invoice"></i>
+        <h2>Manage Marks</h2>
+    </a>
+
+    <a href="{{ url_for('hod_manage_attendance') }}" class="hod-card">
+        <i class="fas fa-calendar-check"></i>
+        <h2>Manage Attendance</h2>
+    </a>
+
+    <a href="#" onclick="alert('Timetable Management Coming Soon');" class="hod-card">
+        <i class="fas fa-table"></i>
+        <h2>Department Timetable</h2>
+    </a>
+    
+    <a href="{{ url_for('view_student_profiles_page') }}" class="hod-card">
+        <i class="fas fa-user-graduate"></i>
+        <h2>Student Profiles</h2>
+    </a>
+</div>
+{% endblock %}

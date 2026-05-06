@@ -1,0 +1,247 @@
+{% extends "layout.html" %}
+
+{% block title %}Manage Marks - {{ department }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <style>
+        :root {
+            --accent-color: #10b981;
+            --accent-hover: #059669;
+        }
+        .content-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-weight: 600; margin-bottom: 0.5rem; color: #64748b; }
+        .form-group select { padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+        
+        .marks-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .marks-table th, .marks-table td { border: 1px solid #e2e8f0; padding: 0.75rem; text-align: center; }
+        .marks-table th { background: #f8fafc; font-weight: 600; }
+        
+        .btn-action {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-action:hover { background-color: var(--accent-hover); }
+        .btn-action:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+        .marks-input {
+            width: 80px;
+            padding: 0.4rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <h2>Manage Student Marks - {{ department }}</h2>
+    
+    <div class="controls">
+        <div class="form-group">
+            <label for="semesterSelect">Semester</label>
+            <select id="semesterSelect">
+                <option value="">-- Select Semester --</option>
+                {% for i in range(1, 9) %}
+                <option value="{{ i }}">Semester {{ i }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="subjectSelect">Subject</label>
+            <select id="subjectSelect" disabled>
+                <option value="">-- Select Semester First --</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="examSelect">Exam Type</label>
+            <select id="examSelect">
+                <option value="mid1">Mid Term 1</option>
+                <option value="mid2">Mid Term 2</option>
+                <option value="endsem">End Semester</option>
+            </select>
+        </div>
+        <div class="form-group" style="justify-content: flex-end;">
+            <button id="loadBtn" class="btn-action">Load Marks</button>
+        </div>
+    </div>
+
+    <div id="gridSection" style="display: none;">
+        <table class="marks-table">
+            <thead>
+                <tr>
+                    <th>Roll No</th>
+                    <th>Name</th>
+                    <th>Marks</th>
+                </tr>
+            </thead>
+            <tbody id="marksBody"></tbody>
+        </table>
+        <div style="margin-top: 1.5rem; text-align: right;">
+            <button id="saveBtn" class="btn-action">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const department = "{{ department }}";
+    const supabaseUrl = "{{ supabase_url }}";
+    const supabaseKey = "{{ supabase_key }}";
+    const supabase = supabasejs.createClient(supabaseUrl, supabaseKey);
+
+    const semSelect = document.getElementById('semesterSelect');
+    const subSelect = document.getElementById('subjectSelect');
+    const examSelect = document.getElementById('examSelect');
+    const loadBtn = document.getElementById('loadBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const marksBody = document.getElementById('marksBody');
+    const gridSection = document.getElementById('gridSection');
+
+    const marksTables = {{ marks_tables_json | safe }};
+    const MARKS_TABLE_MAP = {
+        1: marksTables[0], 2: marksTables[0],
+        3: marksTables[1], 4: marksTables[1],
+        5: marksTables[2], 6: marksTables[2],
+        7: marksTables[3], 8: marksTables[3]
+    };
+    const BATCH_MAP = {
+        1: 'b1', 2: 'b1',
+        3: 'b2', 4: 'b2',
+        5: 'b3', 6: 'b3',
+        7: 'b4', 8: 'b4'
+    };
+
+    let currentCourses = [];
+
+    semSelect.addEventListener('change', async () => {
+        const sem = semSelect.value;
+        subSelect.innerHTML = '<option value="">-- Loading --</option>';
+        subSelect.disabled = true;
+        gridSection.style.display = 'none';
+
+        if (!sem) return;
+
+        const { data, error } = await supabase
+            .from('courses')
+            .select('*')
+            .eq('department', department)
+            .eq('semester', sem);
+
+        if (error) {
+            alert("Error fetching courses: " + error.message);
+            return;
+        }
+
+        currentCourses = data;
+        subSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+        data.forEach(c => {
+            subSelect.innerHTML += `<option value="${c.course_code}">${c.course_name} (${c.course_code})</option>`;
+        });
+        subSelect.disabled = false;
+    });
+
+    loadBtn.addEventListener('click', async () => {
+        const sem = semSelect.value;
+        const sub = subSelect.value;
+        const exam = examSelect.value;
+
+        if (!sem || !sub) return alert("Select semester and subject");
+
+        loadBtn.disabled = true;
+        loadBtn.textContent = "Loading...";
+
+        try {
+            const batch = BATCH_MAP[sem];
+            const marksTable = MARKS_TABLE_MAP[sem];
+
+            // 1. Get Students
+            const { data: students, error: sErr } = await supabase.from(batch).select('roll_no, student_name').order('roll_no');
+            if (sErr) throw sErr;
+
+            // 2. Get Existing Marks
+            const { data: marks, error: mErr } = await supabase.from(marksTable).select('*').eq('subject_code', sub);
+            if (mErr) throw mErr;
+
+            const marksMap = new Map(marks.map(m => [m.roll_no.toLowerCase(), m]));
+
+            marksBody.innerHTML = '';
+            students.forEach(s => {
+                const mRecord = marksMap.get(s.roll_no.toLowerCase());
+                const val = mRecord ? mRecord[exam] : '';
+                marksBody.innerHTML += `
+                    <tr data-roll="${s.roll_no}">
+                        <td>${s.roll_no.toUpperCase()}</td>
+                        <td style="text-align: left;">${s.student_name}</td>
+                        <td><input type="number" step="0.5" class="marks-input" value="${val || ''}"></td>
+                    </tr>
+                `;
+            });
+
+            gridSection.style.display = 'block';
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            loadBtn.disabled = false;
+            loadBtn.textContent = "Load Marks";
+        }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        const sem = semSelect.value;
+        const sub = subSelect.value;
+        const exam = examSelect.value;
+        const table = MARKS_TABLE_MAP[sem];
+        const course = currentCourses.find(c => c.course_code === sub);
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
+
+        const rows = marksBody.querySelectorAll('tr');
+        const payloads = [];
+
+        rows.forEach(row => {
+            const roll = row.dataset.roll;
+            const val = row.querySelector('input').value;
+            payloads.push({
+                roll_no: roll.toLowerCase(),
+                subject_code: sub,
+                credits: course.credits,
+                [exam]: val === '' ? null : parseFloat(val)
+            });
+        });
+
+        const { error } = await supabase.from(table).upsert(payloads, { onConflict: 'roll_no,subject_code' });
+
+        if (error) {
+            alert("Save failed: " + error.message);
+        } else {
+            alert("Marks saved successfully!");
+        }
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save Changes";
+    });
+});
+</script>
+{% endblock %}

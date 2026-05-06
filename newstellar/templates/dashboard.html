@@ -61,7 +61,7 @@
             align-items: center;
             width: 100%;
             background: var(--secondary-bg);
-            padding: 1rem 1.5rem;
+            padding: 0.7rem 1.2rem;
             box-shadow: 0 4px 20px var(--shadow-light);
             position: sticky;
             top: 0;
@@ -79,10 +79,10 @@
         .logo-container {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem;
             font-weight: bold;
             color: var(--text-color);
-            min-width: 12rem;
+            min-width: 10rem;
         }
 
         .logo-flipper {
@@ -127,7 +127,7 @@
         }
 
         .logo-name {
-            font-size: 1.2rem;
+            font-size: 1.05rem;
         }
 
         .typing {
@@ -151,7 +151,7 @@
         .nav-links {
             list-style: none;
             display: flex;
-            gap: 1rem;
+            gap: 0.5rem;
         }
 
         .nav-links li {
@@ -171,11 +171,11 @@
         .nav-links a {
             color: var(--text-color);
             text-decoration: none;
-            font-size: 1rem;
-            padding: 0.5rem 0.3rem;
+            font-size: 0.9rem;
+            padding: 0.4rem 0.2rem;
             display: flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.3rem;
             position: relative;
             transition: color var(--transition-speed);
         }
@@ -351,6 +351,9 @@
         }
         .role-badge.admin {
             background: linear-gradient(90deg, #f87171, #ef4444); /* Red */
+        }
+        .role-badge.alumni {
+            background: linear-gradient(90deg, #6b7a8c, #4a5568); /* Gray */
         }
         /* End of Role Badge Style */
 
@@ -836,6 +839,61 @@
             margin: 0.3rem 0;
             color: var(--subtle-text);
         }
+
+        /* Notifications */
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+        }
+        .notification-badge {
+            position: absolute;
+            top: 2px;
+            right: -6px;
+            background-color: #dc3545;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 5px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: none; /* hidden if 0 */
+        }
+        .notification-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 35px;
+            background-color: #fff;
+            min-width: 300px;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            z-index: 1000;
+            padding: 0;
+            border: 1px solid #dee2e6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .notification-dropdown.show { display: block; }
+        .notification-header {
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 600;
+            border-radius: 8px 8px 0 0;
+            color: #212529; /* Dark text for header */
+        }
+        .notification-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f1f3f5;
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+            pointer-events: auto; /* Ensure clickable */
+        }
+        .notification-item:hover { background-color: #f8f9fa; }
+        .notification-item.unread { background-color: #eaf1f7; }
+        .notification-content { font-size: 0.9rem; margin-bottom: 4px; color: #212529; }
+        .notification-meta { font-size: 0.75rem; color: #6c757d; }
+        .notification-empty { padding: 15px; text-align: center; color: #6c757d; font-size: 0.9rem; }
     </style>
 </head>
 
@@ -883,13 +941,45 @@
                 {% endif %}
             </li>
             
+            <!-- Student specific links -->
+            {% if session.user.role == 'student' %}
+            <li><a href="{{ url_for('student_hostel_page') }}"><i class="fas fa-hotel"></i> Hostel Portal</a></li>
+            {% endif %}
+
+            <!-- Warden specific link -->
+            {% if session.user.role == 'teacher' and session.user.is_warden %}
+            <li><a href="{{ url_for('warden_dashboard') }}" style="color: #6366f1; font-weight: bold;"><i class="fas fa-user-shield"></i> Warden Dashboard</a></li>
+            {% endif %}
+
             <!-- Teacher/Admin only links -->
             {% if session.user.role == 'teacher' or session.user.role == 'admin' %}
             <li id="teacher-performance-link">
                 <a href="{{ url_for('view_student_profiles_page') }}"><i class="fas fa-chart-line"></i> Student Performance</a>
             </li>
+            {% if session.user.role == 'admin' %}
+            <li><a href="{{ url_for('admin_hostel_management') }}"><i class="fas fa-hotel"></i> Hostel Management</a></li>
+            {% endif %}
             <li id="event-management-link">
                 <a href="{{ url_for('manage_events_page') }}"><i class="fas fa-calendar-alt"></i> Event Management</a>
+            </li>
+            <li id="send-notification-link">
+                <a href="{{ url_for('send_notification_page') }}"><i class="fas fa-paper-plane"></i> Send Notification</a>
+            </li>
+            {% endif %}
+
+            {% if session.user.role in ['student', 'teacher', 'admin'] %}
+            <li class="notification-bell" id="notification-bell">
+                <a href="#">
+                    <i class="fas fa-bell"></i> Notifications
+                    <span class="notification-badge" id="notification-badge">0</span>
+                </a>
+                <!-- Dropdown container -->
+                <div class="notification-dropdown" id="notification-dropdown">
+                    <div class="notification-header">Notifications</div>
+                    <div id="notification-list">
+                        <div class="notification-empty">Loading...</div>
+                    </div>
+                </div>
             </li>
             {% endif %}
 
@@ -914,31 +1004,19 @@
     </nav>
 
     <section class="hero">
-        <div class="hero-text">
-            <h1>
-                <!-- MODIFICATION: Added class="brand-gradient" to this span -->
-                Welcome to <span class="brand-gradient">Stellar Mind</span><br>
-                <!-- Display user's name if logged in -->
-                {% if session.user %}
-                    {% set display_name = session.user.student_name or session.user.teacher_name or session.user.username %}
-                    <span id="welcome-user" class="gradient-username">Hi, {{ display_name }} 👋</span>
-                    
-                    <!-- Stylish Role Badge -->
-                    {% if session.user.role == 'student' and session.user.batch %}
-                        <span class="role-badge student">{{ session.user.batch }}</span>
-                    {% elif session.user.role == 'teacher' %}
-                        <span class="role-badge teacher">{{ session.user.role }}</span>
-                    {% elif session.user.role == 'admin' %}
-                        <span class="role-badge admin">{{ session.user.role }}</span>
-                    {% endif %}
+        <div class="hero-text fade-in">
+            <h1>Welcome to <span class="brand-gradient">Stellar Mind</span></h1>
+            <h1>Hello, <span class="brand-gradient">{{ session.user.student_name or session.user.teacher_name or session.user.username }}</span>
+                {% if session.user.role == 'student' %}
+                    <span class="role-badge {{ session.user.batch if session.user.batch in STUDENT_TABLES else 'alumni' }}">
+                        {{ session.user.batch|upper if session.user.batch in STUDENT_TABLES else 'ALUMNI' }}
+                    </span>
+                {% else %}
+                    <span class="role-badge {{ session.user.role }}">{{ session.user.role|upper }}</span>
                 {% endif %}
             </h1>
-            <p>
-                Stellar Mind is a community-driven club where innovation meets creativity.
-                We explore cutting-edge technology, design, and ideas to inspire the next generation of thinkers and
-                creators.
-            </p>
-            <a href="#" class="btn">About Us</a> <!-- Placeholder About Us link -->
+            <p>Welcome to your personal dashboard. Stay updated with your classes, events, and performance.</p>
+            <a href="#" class="btn">About Us</a>
         </div>
 
         <div class="spline-card">
@@ -958,8 +1036,16 @@
 
     <!-- Today's Classes (Only for Students) -->
     {% if session.user.role == 'student' %}
+    <div id="backlog-alert" style="display:none; margin: 1rem 10%; background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 1rem; border: 1px solid #fecaca; text-align: center; font-weight: 600;">
+        <i class="fas fa-exclamation-triangle"></i> You have active backlogs. Please check your <a href="{{ url_for('student_marks_page') }}" style="color: #ef4444; text-decoration: underline;">Marks Page</a> for details.
+    </div>
     <section class="todays-classes" id="todays-classes-section">
-        <h2>Today's Classes</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2>Today's Classes</h2>
+            <a href="{{ url_for('student_hostel_page') }}" class="btn" style="background: #1e293b; border-radius: 2rem; font-size: 0.8rem;">
+                <i class="fas fa-hotel"></i> Hostel Portal
+            </a>
+        </div>
         <div id="classes-list" class="classes-list">
             {% if today_is_holiday %}
                 <div class="holiday-message">🎉 Today is a Holiday 🎉</div>
@@ -1111,6 +1197,102 @@
                 typeText(logoNames[currentNameIndex]).then(() => {
                     setTimeout(runAnimation, 2000);
                 });
+            }
+
+            // --- Notifications Logic ---
+            const bell = document.getElementById('notification-bell');
+            const dropdown = document.getElementById('notification-dropdown');
+            const badge = document.getElementById('notification-badge');
+            const list = document.getElementById('notification-list');
+            
+            if (bell && dropdown && badge && list) {
+                // Fetch notifications
+                function fetchNotifications() {
+                    fetch('/api/notifications')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.error) return;
+                            
+                            const notifications = data.notifications || [];
+                            const unreadCount = data.unread_count || 0;
+                            
+                            // Update badge
+                            if (unreadCount > 0) {
+                                badge.textContent = unreadCount;
+                                badge.style.display = 'inline-block';
+                            } else {
+                                badge.style.display = 'none';
+                            }
+                            
+                            // Update list
+                            if (notifications.length === 0) {
+                                list.innerHTML = '<div class="notification-empty">No notifications</div>';
+                                return;
+                            }
+                            
+                            list.innerHTML = '';
+                            notifications.forEach(n => {
+                                const item = document.createElement('div');
+                                item.className = 'notification-item' + (n.is_read ? '' : ' unread');
+                                item.innerHTML = `
+                                    <div class="notification-content">${n.message}</div>
+                                    <div class="notification-meta">${n.sender_name} &bull; ${new Date(n.created_at).toLocaleDateString()}</div>
+                                `;
+                                // Mark as read on click
+                                item.addEventListener('click', function(e) {
+                                    e.stopPropagation(); // Avoid closing dropdown immediately maybe
+                                    if (!n.is_read) {
+                                        fetch('/api/notifications/read', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ notification_id: n.id })
+                                        }).then(res => {
+                                            if (res.ok) fetchNotifications();
+                                        });
+                                    }
+                                });
+                                list.appendChild(item);
+                            });
+                        })
+                        .catch(err => console.error("Error fetching notifications:", err));
+                }
+
+                // Toggle dropdown
+                bell.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    dropdown.classList.toggle('show');
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!bell.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                    }
+                });
+
+                // Initial fetch
+                fetchNotifications();
+                // Polling every 30 seconds
+                setInterval(fetchNotifications, 30000);
+
+                // Check for backlogs if student
+                {% if session.user.role == 'student' %}
+                async function checkBacklogs() {
+                    try {
+                        const supabaseClient = supabase.createClient("{{ supabase_url }}", "{{ supabase_key }}");
+                        const { data } = await supabaseClient
+                            .from('backlogs')
+                            .select('id')
+                            .eq('roll_no', '{{ session.user.roll_no }}')
+                            .eq('status', 'active');
+                        
+                        if (data && data.length > 0) {
+                            document.getElementById('backlog-alert').style.display = 'block';
+                        }
+                    } catch (e) { console.error("Backlog check failed:", e); }
+                }
+                checkBacklogs();
+                {% endif %}
             }
         });
     </script>

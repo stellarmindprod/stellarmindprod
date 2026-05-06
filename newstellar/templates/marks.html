@@ -233,8 +233,10 @@
     const SUPABASE_KEY = "{{ supabase_key | safe }}";
     const STUDENT_ROLL_NO = "{{ user.roll_no | safe }}";
     const STUDENT_NAME = "{{ (user.student_name or user.roll_no) | safe }}";
-    const MARKS_TABLE = "{{ marks_table | safe }}";
-    const COURSE_TABLE = "courses"; // Assuming 'courses' is the table name
+    const MARKS_TABLES = {{ marks_tables | tojson }};
+    const ANNOUNCEMENT_STATUS = {{ announcement_status | tojson }};
+    const GRADES_DATA = {{ grades_data | tojson }};
+    const COURSE_TABLE = "courses";
 
     // --- Initialize Supabase client ---
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -242,6 +244,7 @@
     // --- Global state ---
     let subjectData = {
         marks: [],
+        backlogs: [],
         courseMap: new Map()
     };
 
@@ -273,33 +276,46 @@
      * Fetches marks and course data from Supabase
      */
     async function loadInitialData() {
-        if (!STUDENT_ROLL_NO || !MARKS_TABLE) {
+        if (!STUDENT_ROLL_NO) {
             marksArea.innerHTML = `<div class="status-message">⚠️ Could not find student data.</div>`;
             return;
         }
 
         try {
-            // Fetch marks
-            const { data: marksData, error: marksError } = await supabaseClient
-                .from(MARKS_TABLE)
-                .select('subject_code, mid1, mid2, endsem, final_grade')
-                .eq('roll_no', STUDENT_ROLL_NO);
+            let allMarks = [];
+            
+            // 1. Fetch marks from ALL tables in parallel
+            const fetchPromises = MARKS_TABLES.map(table => 
+                supabaseClient
+                    .from(table)
+                    .select('subject_code, mid1, mid2, endsem, final_grade')
+                    .eq('roll_no', STUDENT_ROLL_NO)
+            );
+            
+            const results = await Promise.all(fetchPromises);
+            results.forEach(res => {
+                if (res.data) allMarks = allMarks.concat(res.data);
+            });
 
-            if (marksError) throw marksError;
-
-            // Fetch course names
+            // 2. Fetch course names
             const { data: coursesData, error: coursesError } = await supabaseClient
                 .from(COURSE_TABLE)
                 .select('course_code, course_name');
             
             if (coursesError) throw coursesError;
-
-            // Create a map for easy lookup
             subjectData.courseMap = new Map(coursesData.map(course => [course.course_code, course.course_name]));
-            subjectData.marks = marksData;
+
+            // 3. Fetch Backlogs
+            const { data: backlogsData } = await supabaseClient
+                .from('backlogs')
+                .select('*')
+                .eq('roll_no', STUDENT_ROLL_NO);
+            subjectData.backlogs = backlogsData || [];
+
+            subjectData.marks = allMarks;
 
             // Initial render
-            renderMarks("mid1"); // Render "Mid Term 1" by default
+            renderMarks("mid1");
 
         } catch (error) {
             console.error(error);
@@ -308,59 +324,303 @@
     }
 
     /**
+     * Determines the current semester number based on batch and type
+     */
+    function getCurrentSemNum() {
+        const batch = ANNOUNCEMENT_STATUS.batch; 
+        const type = ANNOUNCEMENT_STATUS.current_sem_type || 'odd'; 
+        const mapping = {
+            'b1_odd': 1, 'b1_even': 2,
+            'b2_odd': 3, 'b2_even': 4,
+            'b3_odd': 5, 'b3_even': 6,
+            'b4_odd': 7, 'b4_even': 8
+        };
+        return mapping[`${batch}_${type}`] || 1;
+    }
+
+    /**
      * Renders the marks table for a specific exam type
-     * @param {string} examType - The key for the marks (e.g., "mid1", "mid2", "endsem")
+     * @param {string} examType - The key for the marks (e.g., "mid1", "mid2", "endsem", "final_grade")
      */
     function renderMarks(examType) {
-        if (!subjectData.marks || subjectData.marks.length === 0) {
-            marksArea.innerHTML = `<div class="status-message">No marks uploaded till now.</div>`;
+        if (examType === 'final_grade') {
+            renderFinalGradeHistory();
             return;
         }
 
-        const table = document.createElement('table');
-        table.className = 'marks-table';
+        const isAnnounced = ANNOUNCEMENT_STATUS[examType + '_announced'];
         
-        // Determine header based on exam type
-        const marksHeader = (examType === 'final_grade') ? 'Grade' : 'Marks';
+        if (!isAnnounced) {
+            marksArea.innerHTML = `
+                <div class="status-message" style="background: #f8fafc; color: #64748b; border: 1px dashed #cbd5e1;">
+                    <i class="fas fa-lock" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                    Results for <b>${examType.toUpperCase()}</b> have not been announced yet by the administration.
+                </div>`;
+            return;
+        }
+
+        const currentSem = getCurrentSemNum();
+        
+        if (!subjectData.marks || (subjectData.marks.length === 0 && subjectData.backlogs.length === 0)) {
+            marksArea.innerHTML = `<div class="status-message">No marks found for the current batch.</div>`;
+            return;
+        }
+
+        const container = document.createElement('div');
+        
+        // --- PRINT BUTTON ---
+        const printBtn = document.createElement('button');
+        printBtn.className = 'btn-print no-print';
+        printBtn.innerHTML = '<i class="fas fa-print"></i> Print Result';
+        printBtn.style = "margin-bottom: 1rem; background: var(--accent-start); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 0.5rem; cursor: pointer; font-weight: 600;";
+        printBtn.onclick = () => printResult(examType, currentSem);
+        container.appendChild(printBtn);
+
+        // Show Backlogs Warning if any
+        const activeBacklogs = subjectData.backlogs.filter(b => b.status === 'active');
+        if (activeBacklogs.length > 0) {
+            const warning = document.createElement('div');
+            warning.className = 'status-message no-print';
+            warning.style.background = '#fee2e2';
+            warning.style.color = '#991b1b';
+            warning.style.marginBottom = '2rem';
+            warning.innerHTML = `⚠️ You have <b>${activeBacklogs.length} active backlog(s)</b>. Please contact administration for details.`;
+            container.appendChild(warning);
+        }
+
+        const table = document.createElement('table');
+        table.className = 'data-table printable-table';
         
         table.innerHTML = `
             <thead>
               <tr>
-                <th>Subject Code</th>
-                <th>Subject Name</th>
-                <th>${marksHeader}</th>
+                <th>Subject</th>
+                <th>Marks / Grade</th>
+                <th class="no-print">Status</th>
               </tr>
             </thead>
             <tbody></tbody>
         `;
 
         const tbody = table.querySelector('tbody');
-        let hasMarks = false;
+        let hasData = false;
 
         subjectData.marks.forEach(row => {
             const code = row.subject_code;
             const name = subjectData.courseMap.get(code) || 'Unknown Subject';
-            const mark = row[examType] ?? '-'; // Get the mark for the selected exam
+            const mark = row[examType] ?? '-';
+            const isBacklog = subjectData.backlogs.some(b => b.subject_code === code && b.status === 'active');
             
-            if (mark !== null && mark !== '-') { // Check for null as well
-                hasMarks = true;
-            }
+            hasData = true;
 
             const tr = document.createElement('tr');
+            if (isBacklog) tr.style.background = '#fff1f2';
+            
             tr.innerHTML = `
-              <td data-label="Code">${code}</td>
-              <td data-label="Subject">${name}</td>
-              <td data-label="${marksHeader}">${mark}</td>
+              <td>
+                <div style="font-weight: 700;">${name}</div>
+                <div style="font-size: 0.8rem; color: var(--subtle-text);">${code}</div>
+              </td>
+              <td style="font-weight: 800; color: var(--accent-end); font-size: 1.1rem;">${mark}</td>
+              <td class="no-print">${isBacklog ? '<span class="status-badge status-backlog">BACKLOG</span>' : '<span class="status-badge status-cleared">Passed</span>'}</td>
             `;
             tbody.appendChild(tr);
         });
 
-        marksArea.innerHTML = ''; // Clear loading message
-        marksArea.appendChild(table);
-
-        if (!hasMarks) {
-             marksArea.innerHTML = `<div class="status-message">Marks for this exam have not been uploaded yet.</div>`;
+        if (!hasData) {
+             container.innerHTML += `<div class="status-message">No records found for this category.</div>`;
+        } else {
+             container.appendChild(table);
         }
+        
+        marksArea.innerHTML = '';
+        marksArea.appendChild(container);
+    }
+
+    /**
+     * Renders the SGPA/CGPA history table (showing 0.00 if no data)
+     */
+    function renderFinalGradeHistory() {
+        let html = `
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Semester</th>
+                            <th>SGPA</th>
+                            <th>Credits</th>
+                            <th class="no-print">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+        
+        for (let i = 1; i <= 8; i++) {
+            const sgpa = GRADES_DATA[`sgpa_sem${i}`] || '0.00';
+            const credits = GRADES_DATA[`total_credits_sem${i}`] || '0';
+            html += `
+                <tr>
+                    <td>Semester ${i}</td>
+                    <td style="font-weight: 800; color: ${sgpa === '0.00' ? '#64748b' : 'var(--accent-end)'}; font-size: 1.2rem;">${sgpa}</td>
+                    <td style="color: var(--subtle-text);">${credits}</td>
+                    <td class="no-print">
+                        <button onclick="printSemesterResult(${i})" class="btn-print" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; background: var(--accent-start); color: white; border: none; border-radius: 0.4rem; cursor: pointer;">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                    </td>
+                </tr>`;
+        }
+
+        const cgpa = GRADES_DATA['cgpa'] || '0.00';
+        html += `
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1.5rem; padding: 2rem; background: linear-gradient(135deg, var(--accent-start), var(--accent-end)); color: white; border-radius: 1rem; text-align: center; box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);">
+                <div style="font-size: 1rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Cumulative Performance</div>
+                <div style="font-size: 1.2rem; margin-bottom: 0.2rem;">CGPA</div>
+                <div style="font-size: 3.5rem; font-weight: 800; line-height: 1;">${cgpa}</div>
+            </div>
+        `;
+        marksArea.innerHTML = html;
+    }
+
+    /**
+     * Dynamically fetches marks for a past semester and prints them
+     */
+    async function printSemesterResult(semNum) {
+        // Determine table based on semester (1: marks1, 2: marks1e, 3: marks2, 4: marks2e, etc)
+        const tableIndex = Math.ceil(semNum / 2);
+        const isEven = semNum % 2 === 0;
+        const tableName = `marks${tableIndex}${isEven ? 'e' : ''}`;
+        
+        try {
+            // Show loading state
+            marksArea.innerHTML = `<div class="status-message"><i class="fas fa-spinner fa-spin"></i> Fetching records for Semester ${semNum}...</div>`;
+            
+            const { data: marks, error } = await supabaseClient
+                .from(tableName)
+                .select('*')
+                .eq('roll_no', STUDENT_ROLL_NO);
+            
+            if (error) throw error;
+            if (!marks || marks.length === 0) {
+                alert(`No marks found for Semester ${semNum} in ${tableName}.`);
+                renderFinalGradeHistory();
+                return;
+            }
+
+            // Create temporary table for printing
+            let tableHtml = `<table style="width:100%; border-collapse: collapse; margin-top:20px;">
+                <thead>
+                    <tr style="background:#f1f5f9;">
+                        <th style="border:1px solid #e2e8f0; padding:10px;">Subject Code</th>
+                        <th style="border:1px solid #e2e8f0; padding:10px;">Subject Name</th>
+                        <th style="border:1px solid #e2e8f0; padding:10px;">Grade</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            marks.forEach(m => {
+                const sName = subjectData.courseMap.get(m.subject_code) || 'Subject';
+                tableHtml += `
+                    <tr>
+                        <td style="border:1px solid #e2e8f0; padding:10px;">${m.subject_code}</td>
+                        <td style="border:1px solid #e2e8f0; padding:10px;">${sName}</td>
+                        <td style="border:1px solid #e2e8f0; padding:10px; font-weight:bold;">${m.endsem || '-'}</td>
+                    </tr>`;
+            });
+            tableHtml += `</tbody></table>`;
+            
+            // Re-render the history UI
+            renderFinalGradeHistory();
+            
+            // Open print window
+            const printWindow = window.open('', '', 'height=800,width=1000');
+            printWindow.document.write('<html><head><title>Semester Marksheet</title>');
+            printWindow.document.write('<style>body{font-family:sans-serif; padding:40px;} .header{text-align:center; border-bottom:2px solid #eee; margin-bottom:20px; padding-bottom:20px;} .footer{margin-top:40px; text-align:center; font-size:0.8rem; color:#888;}</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(`
+                <div class="header">
+                    <h1>NIT Sikkim</h1>
+                    <h2>Semester ${semNum} Grade Report</h2>
+                    <p>Student: ${STUDENT_NAME} (${STUDENT_ROLL_NO.toUpperCase()})</p>
+                </div>
+                ${tableHtml}
+                <div style="margin-top:20px; text-align:right;">
+                    <strong>SGPA:</strong> ${GRADES_DATA[`sgpa_sem${semNum}`] || '0.00'}
+                </div>
+                <div class="footer">
+                    <p>System Generated Document - ${new Date().toLocaleString()}</p>
+                </div>
+            `);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+
+        } catch (err) {
+            console.error(err);
+            alert("Error fetching historical marks.");
+            renderFinalGradeHistory();
+        }
+    }
+
+    /**
+     * Professional Print Function
+     */
+    function printResult(examType, sem) {
+        const printContent = document.querySelector('.printable-table').outerHTML;
+        const printWindow = window.open('', '', 'height=800,width=1000');
+        
+        printWindow.document.write('<html><head><title>Academic Marksheet -NIT Sikkim</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write(`
+            body { font-family: "Inter", sans-serif; padding: 40px; color: #1e293b; }
+            .header { text-align: center; border-bottom: 2px solid #e2e8f0; margin-bottom: 30px; padding-bottom: 20px; }
+            .header h1 { margin: 0; color: #0284c7; }
+            .header p { margin: 5px 0; color: #64748b; font-size: 1.1rem; }
+            .student-info { display: flex; justify-content: space-between; margin-bottom: 30px; background: #f8fafc; padding: 15px; border-radius: 8px; }
+            .student-info div { line-height: 1.6; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+            th { background: #f1f5f9; font-weight: 700; color: #334155; }
+            .no-print { display: none !important; }
+            .footer { margin-top: 50px; text-align: center; font-size: 0.8rem; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        `);
+        printWindow.document.write('</style></head><body>');
+        
+        printWindow.document.write(`
+            <div class="header">
+                <h1>National Institute of Technology Sikkim</h1>
+                <p>Academic Grade Report - ${examType.toUpperCase()}</p>
+            </div>
+            <div class="student-info">
+                <div>
+                    <strong>Student Name:</strong> ${STUDENT_NAME}<br>
+                    <strong>Roll Number:</strong> ${STUDENT_ROLL_NO.toUpperCase()}
+                </div>
+                <div>
+                    <strong>Academic Year:</strong> ${new Date().getFullYear()}<br>
+                    <strong>Semester:</strong> ${sem}
+                </div>
+            </div>
+            ${printContent}
+            <div class="footer">
+                <p>This is a system-generated document. For official purposes, please contact the NIT Sikkim Academic Section.</p>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+            </div>
+        `);
+        
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
     }
 
     // --- Initial Load ---

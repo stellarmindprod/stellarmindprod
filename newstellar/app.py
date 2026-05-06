@@ -1,15 +1,8 @@
 # stellarminprod/app.py
 
-import os
 import requests
 import json
 import datetime # Import datetime
-import pandas as pd
-from pydantic import BaseModel, Field
-from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.output_parsers import JsonOutputParser
-from werkzeug.utils import secure_filename
 from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -17,9 +10,14 @@ from functools import wraps
 
 # Import configuration variables
 from config import (
-    SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, TEACHER_TABLE, ADMIN_TABLE,
+    SUPABASE_URL, SUPABASE_HEADERS, STUDENT_TABLES, ALL_STUDENT_TABLES,
+    TEACHER_TABLE, ADMIN_TABLE,
     MARKS_TABLES, SECRET_KEY, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE,TIMETABLE_TABLE
+    ATTENDANCE_TABLES, SUPABASE_ANON_KEY, COURSE_TABLE, TIMETABLE_TABLE,
+    NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE,
+    ALUMNI_TABLE, PROMOTION_LOG_TABLE, YEAR_BACK_TABLE, BACKLOG_TABLE,
+    HOSTELS_TABLE, WARDENS_TABLE, HOSTEL_ASSIGNMENTS_TABLE, HOSTEL_COMPLAINTS_TABLE,
+    GATE_PASSES_TABLE
 )
 
 # Initialize Flask App
@@ -31,9 +29,12 @@ app.config['SECRET_KEY'] = SECRET_KEY
 def get_supabase_rest_url(table_name):
     """Constructs the Supabase REST API URL for a table."""
     # Basic validation to prevent unintended table access
-    allowed_tables = STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
+    allowed_tables = ALL_STUDENT_TABLES + MARKS_TABLES + ATTENDANCE_TABLES + [
         TEACHER_TABLE, ADMIN_TABLE, GRADES_TABLE, EVENTS_TABLE, HOLIDAYS_TABLE,
-        COURSE_TABLE, TIMETABLE_TABLE # Added COURSE_TABLE
+        COURSE_TABLE, TIMETABLE_TABLE, NOTIFICATIONS_TABLE, NOTIFICATION_READS_TABLE,
+        PROMOTION_LOG_TABLE, YEAR_BACK_TABLE, BACKLOG_TABLE,
+        HOSTELS_TABLE, WARDENS_TABLE, HOSTEL_ASSIGNMENTS_TABLE, HOSTEL_COMPLAINTS_TABLE,
+        GATE_PASSES_TABLE
     ] # Add other valid tables
     if table_name not in allowed_tables:
          raise ValueError(f"Access to table '{table_name}' is not permitted.")
@@ -41,38 +42,28 @@ def get_supabase_rest_url(table_name):
 
 def determine_student_batch(roll_no):
     """
-    Determines the batch table (b1-b4) based on roll number.
-    This logic now maps semester 1/2 -> b1, 3/4 -> b2, 5/6 -> b3, 7/8 -> b4.
-    We need a way to get semester from roll_no, or we must change this.
-
-    Let's use the old logic from your JS:
-    b25... -> b1 (1st Year)
-    b24... -> b2 (2nd Year)
-    b23... -> b3 (3rd Year)
-    b22... -> b4 (4th Year)
+    Determines the batch table (b1-b4) based on the roll number prefix.
+    This matches the database seeding convention in make_seed.py:
+      b24xxx -> b1 (admitted 2024, default)
+      b23xxx -> b2
+      b22xxx -> b3
+      b21xxx -> b4
+    NOTE: If a student is not found in the expected table, the login code
+    also searches all other batch tables as a fallback.
     """
-    if not roll_no or len(roll_no) < 2:
+    if not roll_no or len(roll_no) < 3 or not roll_no.lower().startswith('b') or not roll_no[1:3].isdigit():
         return None
-    
-    roll_lower = roll_no.lower()
-    
-    if roll_lower.startswith('b25'): # 1st Year
-        return 'b1'
-    if roll_lower.startswith('b24'): # 2nd Year
-        return 'b2'
-    if roll_lower.startswith('b23'): # 3rd Year
-        return 'b3'
-    if roll_lower.startswith('b22'): # 4th Year
-        return 'b4'
-        
-    print(f"Warning: Could not determine batch table for roll_no: {roll_no}")
-    # Fallback for other formats, maybe just check first two chars?
-    if roll_lower.startswith('b1'): return 'b1'
-    if roll_lower.startswith('b2'): return 'b2'
-    if roll_lower.startswith('b3'): return 'b3'
-    if roll_lower.startswith('b4'): return 'b4'
 
-    return None # Return None if no match
+    roll_lower = roll_no.lower()
+    prefix = roll_lower[1:3]  # e.g. '24', '23', '22', '21'
+
+    if prefix == '24': return 'b1'
+    if prefix == '23': return 'b2'
+    if prefix == '22': return 'b3'
+    if prefix == '21': return 'b4'
+
+    print(f"Warning: Roll number prefix 'b{prefix}' does not map to a known batch table.")
+    return None
 
 def get_marks_table_for_student(roll_no):
     """Determines the correct marks table (marks1-marks4) for a student."""
@@ -133,7 +124,11 @@ def get_current_semester(student_batch, current_month):
 # --- Context Processor ---
 @app.context_processor
 def inject_now():
-    return {'now': datetime.datetime.utcnow()}
+    return {
+        'now': datetime.datetime.utcnow(),
+        'STUDENT_TABLES': STUDENT_TABLES,
+        'ALL_STUDENT_TABLES': ALL_STUDENT_TABLES
+    }
 
 # --- Authentication Decorators ---
 
@@ -163,27 +158,39 @@ def fetch_and_verify_user(username, password):
     # Assume username could be roll_no (student), username (teacher/admin), or email (parent/student)
     username_lower = username.lower() 
 
-    # 1. Try Student Tables (by roll_no)
+    # 1. Try Student Tables (by roll_no) — primary table first, then all others as fallback
     batch_table = determine_student_batch(username_lower)
-    if batch_table:
+    tables_to_search = [batch_table] if batch_table else []
+    # Add remaining batch tables as fallback (avoids duplicating primary table)
+    for t in STUDENT_TABLES:
+        if t not in tables_to_search:
+            tables_to_search.append(t)
+
+    for tbl in tables_to_search:
         try:
-            url = get_supabase_rest_url(batch_table)
+            url = get_supabase_rest_url(tbl)
             params = {'select': '*,student_password', 'roll_no': f'eq.{username_lower}'}
             response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
-            if data and len(data) == 1:
+            if data and len(data) >= 1:
                 user_data = data[0]
                 # Check password
                 if check_password_hash(user_data.get('student_password', ''), password):
-                    user_data.pop('student_password', None) # Remove hash from session data
+                    user_data.pop('student_password', None)  # Remove hash from session data
                     user_data.pop('parent_password', None)
                     user_data['role'] = 'student'
-                    user_data['batch'] = batch_table 
-                    user_data['roll_no'] = user_data.get('roll_no', username_lower) # Ensure roll_no is set
+                    user_data['batch'] = tbl
+                    user_data['roll_no'] = user_data.get('roll_no', username_lower)
                     return user_data
+                else:
+                    # Found the user but wrong password — stop searching other batch tables
+                    if data:
+                        print(f"Student {username_lower} found in {tbl} but password mismatch.")
+                        break
         except Exception as e:
-            print(f"Error querying {batch_table} by roll_no: {e}")
+            print(f"Error querying {tbl} by roll_no: {e}")
+
 
     # 2. Try Teacher Table (by username)
     try:
@@ -198,6 +205,22 @@ def fetch_and_verify_user(username, password):
                 user_data.pop('teacher_password', None)
                 user_data['role'] = 'teacher'
                 user_data['username'] = user_data.get('username', username_lower) # Ensure username is set
+                
+                # --- NEW: Check if this teacher is also a warden ---
+                try:
+                    w_url = get_supabase_rest_url(WARDENS_TABLE)
+                    # Check by teacher_email (assuming it's in the teachers table)
+                    teacher_email = user_data.get('teacher_email')
+                    if teacher_email:
+                        w_params = {'teacher_email': f'eq.{teacher_email}'}
+                        w_resp = requests.get(w_url, headers=SUPABASE_HEADERS, params=w_params, timeout=5)
+                        if w_resp.ok and w_resp.json():
+                            warden_info = w_resp.json()[0]
+                            user_data['is_warden'] = True
+                            user_data['hostel_name'] = warden_info.get('hostel_name')
+                except Exception as e:
+                    print(f"Error checking warden status: {e}")
+                
                 return user_data
     except Exception as e:
         print(f"Error querying {TEACHER_TABLE}: {e}")
@@ -285,19 +308,33 @@ def index():
     # --- NEW: Redirect parents away from the main index ---
     if user.get('role') == 'parent':
         return redirect(url_for('parent_dashboard'))
-    # --- End of New Redirect ---
     
     events_data = []
     holidays_data = []
     daily_schedule = []
     today_is_holiday = False
     
-    # Get today's date info (assuming server is in same timezone as users or UTC)
     IST = ZoneInfo("Asia/Kolkata")
     today = datetime.datetime.now(IST) 
-    today_str = today.strftime('%a').upper() # MON, TUE...
-    today_date_str = today.strftime('%Y-%m-%d') # 2025-10-25
+    today_str = today.strftime('%a').upper() 
+    today_date_str = today.strftime('%Y-%m-%d')
     current_month = today.month
+
+    # Check if teacher is a warden
+    is_warden = False
+    assigned_hostel = None
+    if user.get('role') == 'teacher':
+        try:
+            url = get_supabase_rest_url(WARDENS_TABLE)
+            params = {'teacher_email': f"eq.{user.get('teacher_email')}"}
+            resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=5)
+            if resp.ok and resp.json():
+                is_warden = True
+                assigned_hostel = resp.json()[0].get('hostel_name')
+                session['user']['is_warden'] = True
+                session['user']['hostel_name'] = assigned_hostel
+        except Exception as e:
+            print(f"Error checking warden status: {e}")
 
     # Fetch Events
     try:
@@ -379,7 +416,9 @@ def index():
         events=events_data, 
         holidays=holidays_data, 
         daily_schedule=daily_schedule, 
-        today_is_holiday=today_is_holiday
+        today_is_holiday=today_is_holiday,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
     )
 
 
@@ -451,6 +490,7 @@ def signup_page():
     if request.method == "POST":
         roll_no = request.form.get("roll_no", "").strip().lower()
         student_name = request.form.get("student_name", "").strip()
+        department = request.form.get("department", "").strip()
         student_email = request.form.get("student_email", "").strip().lower()
         password = request.form.get("student_password", "").strip()
         confirm_password = request.form.get("confirm_password", "").strip()
@@ -460,8 +500,8 @@ def signup_page():
         parent_password = request.form.get("parent_password", "").strip()
         
         # Basic validation
-        if not all([roll_no, student_name, student_email, password, confirm_password, parent_email, parent_password]):
-            flash("All fields (including parent details) are required.", "danger")
+        if not all([roll_no, student_name, student_email, password, confirm_password, parent_email, parent_password, department]):
+            flash("All fields (including parent details and department) are required.", "danger")
             return render_template("signup.html")
         if password != confirm_password:
             flash("Student passwords do not match.", "danger")
@@ -517,6 +557,7 @@ def signup_page():
         new_student_data = {
             "roll_no": roll_no,
             "student_name": student_name,
+            "department": department,
             "student_email": student_email,
             "student_password": hashed_student_password, # Store the HASH
             "parent_email": parent_email,
@@ -617,17 +658,45 @@ def student_marks_page():
         flash("Could not identify student roll number.", "danger")
         return redirect(url_for('index'))
 
-    # Use the existing helper function to get the correct marks table
-    marks_table = get_marks_table_for_student(roll_no) 
+    # Fetch announcement status for the student's batch
+    batch = user.get('batch')
+    announcement_status = {}
+    
+    if batch == 'alumni':
+        # Alumni can always see all their historical results
+        announcement_status = {
+            'mid1_announced': True, 
+            'mid2_announced': True, 
+            'endsem_announced': True
+        }
+    elif batch:
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+            params = {'batch': f'eq.{batch}'}
+            resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            if resp.ok and resp.json():
+                announcement_status = resp.json()[0]
+        except Exception as e:
+            print(f"Error fetching announcements: {e}")
 
-    if not marks_table:
-        flash("Could not determine marks records for your batch.", "warning")
-        return redirect(url_for('index'))
+    # Fetch Grades History
+    grades_data = {}
+    try:
+        url_grades = f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}"
+        params_grades = {'roll_no': f'eq.{roll_no}'}
+        resp_grades = requests.get(url_grades, headers=SUPABASE_HEADERS, params=params_grades, timeout=10)
+        if resp_grades.ok and resp_grades.json():
+            grades_data = resp_grades.json()[0]
+    except Exception as e:
+        print(f"Error fetching grades: {e}")
 
+    # MODIFICATION: Pass ALL marks tables, announcement status, and grades data to the template
     return render_template(
-        "marks.html", # Render the new marks.html template
+        "marks.html", 
         user=user, 
-        marks_table=marks_table, # Pass the correct marks table name
+        marks_tables=MARKS_TABLES, 
+        announcement_status=announcement_status,
+        grades_data=grades_data, # Pass this!
         supabase_url=SUPABASE_URL,
         supabase_key=SUPABASE_ANON_KEY
     )
@@ -822,8 +891,41 @@ def admin_mark_attendance_page():
 @app.route("/admin/marks")
 @login_required(role='admin')
 def admin_enter_marks_page():
-     flash("Admin marks management not yet implemented.", "info")
-     return redirect(url_for('index'))
+    user = session.get('user')
+    all_courses = []
+    all_teachers = []
+    
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        params = {'select': 'course_code,course_name,semester,credits,assisting_teacher', 'order': 'semester.asc,course_name.asc'} 
+        response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        all_courses = response.json()
+        
+        all_teachers = fetch_all_teachers()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching all courses/teachers for admin: {e}")
+        flash("Error loading data.", "danger")
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        flash("Server configuration error trying to access courses.", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    return render_template(
+        "admin_marks.html",
+        user=user,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY,
+        all_courses_json=json.dumps(all_courses),
+        all_teachers_json=json.dumps(all_teachers),
+        marks_tables_json=json.dumps(MARKS_TABLES) 
+    )
+
+@app.route("/admin/events")
+@login_required(role='admin')
+def manage_events_page():
+     return render_template("manage_events.html")
 
 @app.route("/admin/dashboard")
 @login_required(role='admin')
@@ -1107,6 +1209,21 @@ def update_course():
 
 # --- AND REPLACE IT WITH THIS ---
 
+def fetch_all_teachers():
+    """Helper to fetch all teachers without passwords."""
+    try:
+        url = get_supabase_rest_url(TEACHER_TABLE)
+        params = {
+            'select': 'teacher_id,username,teacher_name,department,teacher_email,teacher_phone,is_hod,hod_department',
+            'order': 'teacher_name.asc'
+        }
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        if resp.ok:
+            return resp.json()
+    except Exception as e:
+        print(f"Error fetching teachers: {e}")
+    return []
+
 @app.route("/admin/teachers")
 @login_required(role='admin')
 def manage_teachers_page():
@@ -1114,7 +1231,7 @@ def manage_teachers_page():
     teachers = []
     
     search_params = {
-        'select': 'teacher_id,username,teacher_name,department,teacher_email', # Exclude password
+        'select': 'teacher_id,username,teacher_name,department,teacher_email,teacher_phone,is_hod,hod_department', # Include HOD fields
         'order': 'teacher_name.asc'
     }
     
@@ -1174,7 +1291,10 @@ def add_teacher():
             "teacher_name": teacher_name,
             "department": department if department else None,
             "teacher_email": teacher_email,
-            "teacher_password": hashed_password # Store the hash of the default password
+            "teacher_phone": request.form.get('teacher_phone', "").strip(),
+            "teacher_password": hashed_password, # Store the hash of the default password
+            "is_hod": request.form.get('is_hod') == 'true',
+            "hod_department": request.form.get('hod_department') if request.form.get('is_hod') == 'true' else None
         }
 
         try:
@@ -1268,7 +1388,7 @@ def edit_teacher_page(teacher_id):
     try:
         url = get_supabase_rest_url(TEACHER_TABLE)
         # Select specific fields excluding password
-        params = {'select': 'teacher_id,username,teacher_name,department,teacher_email', 'teacher_id': f'eq.{teacher_id}'}
+        params = {'select': 'teacher_id,username,teacher_name,department,teacher_email,teacher_phone,is_hod,hod_department', 'teacher_id': f'eq.{teacher_id}'}
         
         response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
         response.raise_for_status()
@@ -1311,7 +1431,10 @@ def update_teacher():
         update_data = {
             "teacher_name": teacher_name,
             "department": department if department else None,
-            "teacher_email": teacher_email
+            "teacher_email": teacher_email,
+            "teacher_phone": request.form.get('teacher_phone', "").strip(),
+            "is_hod": request.form.get('is_hod') == 'true',
+            "hod_department": request.form.get('hod_department') if request.form.get('is_hod') == 'true' else None
         }
 
         # Removed the logic block that checked for and hashed a new password
@@ -1374,7 +1497,7 @@ def manage_timetable_page():
             url_tt = get_supabase_rest_url(TIMETABLE_TABLE)
             # Join with courses table to get subject names
             params_tt = {
-                'select': 'id,day_of_week,start_time,end_time,subject_code,teacher_name',
+                'select': 'id,day_of_week,start_time,end_time,subject_code,venue,courses(course_name)',
                 'semester': f'eq.{selected_semester}',
                 'order': 'day_of_week.asc,start_time.asc'
             }
@@ -1410,7 +1533,7 @@ def add_timetable_entry():
         start_time = request.form.get('start_time')
         end_time = request.form.get('end_time')
         subject_code = request.form.get('subject_code') or None # Use None if empty
-        teacher_name = request.form.get('teacher_name') or None
+        venue = request.form.get('venue') or None
 
         if not all([semester, day, start_time, end_time]):
             flash("Semester, Day, Start Time, and End Time are required.", "danger")
@@ -1422,7 +1545,7 @@ def add_timetable_entry():
             "start_time": start_time,
             "end_time": end_time,
             "subject_code": subject_code,
-            "teacher_name": teacher_name
+            "venue": venue
         }
         
         url = get_supabase_rest_url(TIMETABLE_TABLE)
@@ -1463,165 +1586,6 @@ def delete_timetable_entry(entry_id):
 
     return redirect(url_for('manage_timetable_page', semester=semester))
 
-class TimetableEntry(BaseModel):
-    semester: int = Field(description="The semester number (1-8).")
-    day_of_week: str = Field(description="3-letter day abbreviation: MON, TUE, WED, THU, FRI, SAT, SUN")
-    start_time: str = Field(description="Start time in HH:MM format (24-hour). Example: '09:00'")
-    end_time: str = Field(description="End time in HH:MM format (24-hour). Example: '10:00'")
-    subject_code: str = Field(description="Subject code ONLY without parentheses (e.g., 'CS101'). Must not contain teacher initials.")
-    teacher_name: str = Field(description="The teacher initials (e.g., 'JS') or Full Name.")
-
-class TimetableOutput(BaseModel):
-    teacher_legend: dict = Field(description="A dictionary explicitly mapping the teacher abbreviations found in the cells (e.g. 'JS') to their full expanded names found at the bottom legend of the Excel file. Find every single one.")
-    entries: list[TimetableEntry] = Field(description="The array of valid timetable entries.")
-
-@app.route("/admin/timetable/upload", methods=['POST'])
-@login_required(role='admin')
-def upload_timetable_excel():
-    """Handles adding timetable entries via unstructured Excel parsing via Hugging Face LLM."""
-    semester = request.form.get('semester')
-    if not semester:
-        flash("Semester is required for uploading an Excel timetable.", "danger")
-        return redirect(url_for('manage_timetable_page'))
-
-    if 'excel_file' not in request.files:
-        flash("No file part provided.", "danger")
-        return redirect(url_for('manage_timetable_page', semester=semester))
-        
-    file = request.files['excel_file']
-    if file.filename == '':
-        flash("No selected file.", "danger")
-        return redirect(url_for('manage_timetable_page', semester=semester))
-        
-    if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
-        try:
-            # 1. Select the BTECH Excel tab based on the chosen semester
-            xls = pd.ExcelFile(file)
-            target_sheet = xls.sheet_names[0] # Default to the first tab
-            for sn in xls.sheet_names:
-                sn_upper = sn.upper()
-                if str(semester) in sn_upper and "BTECH" in sn_upper:
-                    target_sheet = sn
-                    break
-            
-            df = pd.read_excel(xls, sheet_name=target_sheet)
-            markdown_content = f"--- Data from Excel Tab: {target_sheet} ---\n\n" + df.to_markdown(index=False)
-
-            # 2. Setup LLM Parser
-            parser = JsonOutputParser(pydantic_object=TimetableOutput)
-            
-            prompt_instruction = """You are a highly intelligent data extraction assistant parsing a university timetable from a raw Markdown table.
-Analyze the provided table carefully. It contains timetable entries.
-Crucial Requirements:
-1. Identify the teacher legend at the bottom of the document and map abbreviations clearly in the `teacher_legend` dict object.
-2. Extract every single valid class cell into an object in the `entries` array. Do NOT extract blank or break periods.
-3. Explicitly split data: "CS101 (JS)" means subject_code is "CS101" and teacher_name is "JS".
-4. Assign semester exactly to {semester} for all records.
-
-{format_instructions}
-
-Unstructured Timetable Data:
-{table}"""
-            
-            prompt = PromptTemplate(
-                template=prompt_instruction,
-                input_variables=["semester", "table"],
-                partial_variables={"format_instructions": parser.get_format_instructions()},
-            )
-
-            # 3. Use Gemini Model - Ensure GEMINI_API_KEY is set in environment
-            os.environ["GEMINI_API_KEY"] = "AIzaSyADmnz_FSn_DMh_KucGrEMBEED3hIXsgNI"
-            gemini_token = os.environ.get("GEMINI_API_KEY")
-            if not gemini_token:
-                flash("GEMINI_API_KEY environment variable not set. Please expose it in your running environment to use AI upload.", "danger")
-                return redirect(url_for('manage_timetable_page', semester=semester))
-            
-            chat_model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.01)
-            
-            chain = prompt | chat_model | parser
-            output_obj = chain.invoke({"semester": semester, "table": markdown_content})
-            
-            # 4. Filter and process
-            teacher_legend = output_obj.get("teacher_legend", {})
-            structured_entries = output_obj.get("entries", [])
-            if not isinstance(structured_entries, list):
-                structured_entries = [structured_entries]
-
-            import pprint
-            print("\n-------------- RAW AI JSON EXTRACTION --------------")
-            pprint.pprint(output_obj)
-            print("----------------------------------------------------\n")
-
-            if len(structured_entries) > 0:
-                print(f"Purging existing timetable records for Semester {semester}...")
-                del_url = get_supabase_rest_url(TIMETABLE_TABLE)
-                del_headers = SUPABASE_HEADERS.copy()
-                requests.delete(del_url, headers=del_headers, params={'semester': f'eq.{semester}'}, timeout=10)
-
-            print(f"AI Extraction produced {len(structured_entries)} items. Attempting DB insertion...")
-            success_count = 0
-            error_msg = ""
-            for i, entry in enumerate(structured_entries):
-                try:
-                    start_time = entry.get('start_time')
-                    end_time = entry.get('end_time')
-                    day_of_week = entry.get('day_of_week', '').upper()[:3]
-                    
-                    if not start_time or not end_time or not day_of_week:
-                        print(f"Skipping Entry {i+1} due to missing required fields (Time/Day):", entry)
-                        continue
-                        
-                    # Scrub subject_code to prevent Foreign Key constraints from crashing
-                    subject_code = entry.get('subject_code')
-                    if subject_code:
-                        subject_code_upper = subject_code.upper().strip()
-                        if "BREAK" in subject_code_upper or "LUNCH" in subject_code_upper or "RECESS" in subject_code_upper:
-                            subject_code = None
-
-                    raw_teacher = entry.get('teacher_name') or ''
-                    mapped_teacher = teacher_legend.get(raw_teacher.strip(), raw_teacher) if raw_teacher else None
-
-                    new_entry = {
-                        "semester": int(entry.get('semester', semester)),
-                        "day_of_week": day_of_week,
-                        "start_time": start_time,
-                        "end_time": end_time,
-                        "subject_code": subject_code,
-                        "teacher_name": mapped_teacher
-                    }
-                    print(f"Inserting Entry {i+1}:", new_entry)
-                    url = get_supabase_rest_url(TIMETABLE_TABLE)
-                    headers = SUPABASE_HEADERS.copy()
-                    headers['Prefer'] = 'return=minimal'
-                    resp = requests.post(url, headers=headers, json=new_entry, timeout=10)
-                    if resp.status_code == 201:
-                        success_count += 1
-                    else:
-                        print(f"DB Insert Failed! Status {resp.status_code}: {resp.text}")
-                        error_msg = f"DB Status {resp.status_code}: {resp.text}"
-                except Exception as ex:
-                    print(f"Skipping badly formatted entry {entry}: {ex}")
-
-            if success_count > 0:
-                flash(f"Successfully processed and added {success_count} timetable entries.", "success")
-            else:
-                flash(f"Failed to add entries. AI found {len(structured_entries)} items but DB rejected them: {error_msg}", "danger")
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            print(f"Error parsing or uploading Excel:\n{error_details}")
-            # Identify if it's an OutputParserException (empty response)
-            err_name = type(e).__name__
-            flash(f"Error processing Excel using AI ({err_name}): {str(e)[:150]}", "danger")
-    else:
-        flash("Invalid file type. Please upload a .xlsx or .xls file.", "danger")
-
-    return redirect(url_for('manage_timetable_page', semester=semester))
-
-@app.route("/admin/events")
-@login_required(role='admin')
-def manage_events_page():
-     return render_template("manage_events.html")
 
 
 # --- START: NOTIFICATION ROUTES ---
@@ -1753,7 +1717,1201 @@ def send_notification_page():
         
     return render_template("send_notification.html")
 
-# --- END: NOTIFICATION ROUTES ---
+# --- START: BATCH PROMOTION & BACKLOG ROUTES ---
+
+@app.route("/admin/batch-promotion")
+@login_required(role='admin')
+def admin_batch_promotion_page():
+    """Renders the batch promotion management page."""
+    user = session.get('user')
+    
+    batch_counts = {}
+    year_back_students = []
+    active_backlogs = []
+    promotion_logs = []
+    announcements = []
+    
+    try:
+        # Fetch Result Announcements
+        url_ann = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        resp_ann = requests.get(url_ann, headers=SUPABASE_HEADERS, timeout=10)
+        if resp_ann.ok:
+            announcements = resp_ann.json()
+
+        # Fetch counts
+        for batch in ALL_STUDENT_TABLES:
+            url = get_supabase_rest_url(batch)
+            params = {'select': 'roll_no'} 
+            response = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            if response.ok:
+                batch_counts[batch] = len(response.json())
+            else:
+                batch_counts[batch] = 0
+
+        # Fetch Year-Back Students
+        url_yb = get_supabase_rest_url(YEAR_BACK_TABLE)
+        response_yb = requests.get(url_yb, headers=SUPABASE_HEADERS, timeout=10)
+        if response_yb.ok:
+            year_back_students = response_yb.json()
+
+        # Fetch Active Backlogs
+        url_bl = get_supabase_rest_url(BACKLOG_TABLE)
+        params_bl = {'status': 'eq.active'}
+        response_bl = requests.get(url_bl, headers=SUPABASE_HEADERS, params=params_bl, timeout=10)
+        if response_bl.ok:
+            active_backlogs = response_bl.json()
+
+        # Fetch Promotion Logs
+        url_pl = get_supabase_rest_url(PROMOTION_LOG_TABLE)
+        params_pl = {'order': 'promoted_at.desc'}
+        response_pl = requests.get(url_pl, headers=SUPABASE_HEADERS, params=params_pl, timeout=10)
+        if response_pl.ok:
+            promotion_logs = response_pl.json()
+
+    except Exception as e:
+        print(f"Error loading batch promotion data: {e}")
+        flash("Some data could not be loaded.", "warning")
+
+    return render_template(
+        "batch_promotion.html",
+        user=user,
+        batch_counts=batch_counts,
+        year_back_students=year_back_students,
+        active_backlogs=active_backlogs,
+        promotion_logs=promotion_logs,
+        announcements=announcements, # Added this
+        STUDENT_TABLES=STUDENT_TABLES
+    )
+
+@app.route("/admin/batch-promotion/promote", methods=["POST"])
+@login_required(role='admin')
+def promote_batches():
+    """Handles the heavy lifting of promoting students across batches."""
+    admin_user = session.get('user')
+    promoted_by = admin_user.get('username')
+    
+    results = {
+        'to_alumni': 0,
+        'promoted': 0,
+        'year_back_skipped': 0
+    }
+    
+    try:
+        # 1. Get all year-back roll numbers to exclude
+        url_yb = get_supabase_rest_url(YEAR_BACK_TABLE)
+        resp_yb = requests.get(url_yb, headers=SUPABASE_HEADERS, timeout=10)
+        year_back_rolls = [s['roll_no'] for s in resp_yb.json()] if resp_yb.ok else []
+        results['year_back_skipped'] = len(year_back_rolls)
+
+        # Helper to move students
+        def move_students(from_table, to_table):
+            url_from = get_supabase_rest_url(from_table)
+            resp_from = requests.get(url_from, headers=SUPABASE_HEADERS, timeout=30)
+            if not resp_from.ok: return 0
+            
+            students = resp_from.json()
+            to_move = [s for s in students if s['roll_no'] not in year_back_rolls]
+            
+            if not to_move: return 0
+            
+            # Insert into to_table
+            url_to = get_supabase_rest_url(to_table)
+            students_payload = []
+            for s in to_move:
+                # Create a copy and remove ID
+                sc = s.copy()
+                sc.pop('id', None)
+                students_payload.append(sc)
+            
+            resp_to = requests.post(url_to, headers=SUPABASE_HEADERS, json=students_payload, timeout=30)
+            if not resp_to.ok:
+                print(f"Error moving to {to_table}: {resp_to.text}")
+                raise Exception(f"Failed to insert into {to_table}")
+            
+            # Delete from from_table
+            for s in to_move:
+                delete_params = {'roll_no': f"eq.{s['roll_no']}"}
+                requests.delete(url_from, headers=SUPABASE_HEADERS, params=delete_params, timeout=10)
+            
+            return len(to_move)
+
+        # Execute in sequence (Reverse order)
+        # 1. b4 -> alumni
+        results['to_alumni'] = move_students('b4', 'alumni')
+        # 2. b3 -> b4
+        results['promoted'] += move_students('b3', 'b4')
+        # 3. b2 -> b3
+        results['promoted'] += move_students('b2', 'b3')
+        # 4. b1 -> b2
+        results['promoted'] += move_students('b1', 'b2')
+
+        # 5. Reset Result Announcements for all promoted batches
+        url_ann = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        reset_payload = {
+            'mid1_announced': False,
+            'mid2_announced': False,
+            'endsem_announced': False,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        # Reset all announcement toggles
+        requests.patch(url_ann, headers=SUPABASE_HEADERS, json=reset_payload, timeout=10)
+
+        # 6. CLEAR MARKS TABLES (Clean Slate for new academic year)
+        # We clear the marks table that the batch just finished using.
+        for i in range(1, 5):
+            m_table = f"marks{i}"
+            requests.delete(f"{SUPABASE_URL}/rest/v1/{m_table}", headers=SUPABASE_HEADERS, params={'roll_no': 'neq.0'}, timeout=10)
+
+        # 7. Log the event
+        url_log = get_supabase_rest_url(PROMOTION_LOG_TABLE)
+        log_entry = {
+            'promoted_by': promoted_by,
+            'students_promoted': results['promoted'],
+            'students_to_alumni': results['to_alumni'],
+            'year_back_excluded': len(year_back_rolls),
+            'notes': f"Batch promotion executed on {datetime.datetime.now().strftime('%Y-%m-%d')}"
+        }
+        requests.post(url_log, headers=SUPABASE_HEADERS, json=log_entry)
+
+        flash(f"Promotion successful! {results['promoted']} students promoted, {results['to_alumni']} moved to alumni.", "success")
+
+    except Exception as e:
+        print(f"Promotion Error: {e}")
+        flash(f"Error during promotion: {str(e)}", "danger")
+
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/year-back/add", methods=["POST"])
+@login_required(role='admin')
+def add_year_back():
+    roll_no = request.form.get('roll_no', '').strip().lower()
+    student_name = request.form.get('student_name', '').strip()
+    current_batch = request.form.get('current_batch', '').strip()
+    reason = request.form.get('reason', '').strip()
+    
+    if not roll_no or not current_batch:
+        flash("Roll number and current batch are required.", "danger")
+        return redirect(url_for('admin_batch_promotion_page'))
+        
+    try:
+        url = get_supabase_rest_url(YEAR_BACK_TABLE)
+        payload = {
+            'roll_no': roll_no,
+            'student_name': student_name,
+            'current_batch': current_batch,
+            'reason': reason
+        }
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash(f"Student {roll_no} added to year-back list.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/year-back/remove/<int:id>", methods=["POST"])
+@login_required(role='admin')
+def remove_year_back(id):
+    try:
+        url = get_supabase_rest_url(YEAR_BACK_TABLE)
+        params = {'id': f'eq.{id}'}
+        resp = requests.delete(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        resp.raise_for_status()
+        flash("Student removed from year-back list.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/backlogs/add", methods=["POST"])
+@login_required(role='admin')
+def add_backlog():
+    roll_no = request.form.get('roll_no', '').strip().lower()
+    subject_code = request.form.get('subject_code', '').strip().upper()
+    subject_name = request.form.get('subject_name', '').strip()
+    semester = request.form.get('semester')
+    batch = request.form.get('batch', '').strip()
+    
+    if not all([roll_no, subject_code, semester]):
+        flash("Roll no, subject code, and semester are required.", "danger")
+        return redirect(url_for('admin_batch_promotion_page'))
+        
+    try:
+        url = get_supabase_rest_url(BACKLOG_TABLE)
+        payload = {
+            'roll_no': roll_no,
+            'subject_code': subject_code,
+            'subject_name': subject_name,
+            'semester': int(semester),
+            'batch_when_failed': batch,
+            'status': 'active'
+        }
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash(f"Backlog added for {roll_no}.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/backlogs/clear/<int:id>", methods=["POST"])
+@login_required(role='admin')
+def clear_backlog(id):
+    try:
+        url = get_supabase_rest_url(BACKLOG_TABLE)
+        params = {'id': f'eq.{id}'}
+        payload = {
+            'status': 'cleared',
+            'cleared_date': datetime.datetime.now().isoformat()
+        }
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash("Backlog marked as cleared.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/reset-test-data", methods=["POST"])
+@login_required(role='admin')
+def reset_test_data():
+    """Testing utility: Moves all students from B2, B3, B4 back to B1."""
+    try:
+        all_moved = 0
+        # 1. Fetch from B2, B3, B4
+        for source_batch in ["b2", "b3", "b4"]:
+            url_source = get_supabase_rest_url(source_batch)
+            resp = requests.get(url_source, headers=SUPABASE_HEADERS, timeout=10)
+            if not resp.ok: continue
+            
+            students = resp.json()
+            if not students: continue
+            
+            # 2. Push to B1
+            url_target = get_supabase_rest_url("b1")
+            for std in students:
+                # Remove ID to allow new primary key generation if necessary, or keep if roll_no is unique
+                # Actually, Supabase identity columns handle this.
+                std.pop('id', None) 
+                requests.post(url_target, headers=SUPABASE_HEADERS, json=std, timeout=10)
+                all_moved += 1
+            
+            # 3. Clear source table
+            requests.delete(url_source, headers=SUPABASE_HEADERS, params={'roll_no': 'neq.0'}, timeout=10)
+
+        flash(f"Test Reset Complete: {all_moved} students moved back to B1.", "success")
+    except Exception as e:
+        flash(f"Reset Error: {str(e)}", "danger")
+    return redirect(url_for('admin_batch_promotion_page'))
+
+@app.route("/admin/result-management")
+@login_required(role='admin')
+def admin_result_management_page():
+    """Renders the dedicated result announcement management page."""
+    user = session.get('user')
+    announcements = []
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        resp = requests.get(url, headers=SUPABASE_HEADERS, timeout=10)
+        if resp.ok:
+            announcements = resp.json()
+    except Exception as e:
+        print(f"Error fetching announcements: {e}")
+        
+    return render_template("result_management.html", user=user, announcements=announcements)
+
+@app.route("/admin/announce-result", methods=["POST"])
+@login_required(role='admin')
+def announce_result():
+    batch = request.form.get('batch')
+    exam_type = request.form.get('exam_type') # mid1, mid2, endsem
+    status = request.form.get('status') == 'true'
+    
+    if not batch or not exam_type:
+        flash("Invalid announcement request.", "danger")
+        return redirect(url_for('admin_result_management_page'))
+        
+    try:
+        # Check sequence
+        url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        params = {'batch': f'eq.{batch}'}
+        curr_resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        curr = curr_resp.json()[0] if curr_resp.ok and curr_resp.json() else {}
+        
+        if status: # Turning ON
+            if exam_type == 'mid2' and not curr.get('mid1_announced'):
+                flash("Cannot announce Mid 2 before Mid 1.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+            if exam_type == 'endsem' and not curr.get('mid2_announced'):
+                flash("Cannot announce End-Sem before Mid 2.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+        else: # Turning OFF
+            if exam_type == 'mid1' and curr.get('mid2_announced'):
+                flash("Cannot un-announce Mid 1 while Mid 2 is still public.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+            if exam_type == 'mid2' and curr.get('endsem_announced'):
+                flash("Cannot un-announce Mid 2 while End-Sem is still public.", "warning")
+                return redirect(url_for('admin_result_management_page'))
+
+        # 4. Update Announcement
+        col = f"{exam_type}_announced"
+        payload = {col: status, 'updated_at': datetime.datetime.now().isoformat()}
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        resp.raise_for_status()
+
+        # 5. SYNC GRADES
+        if status: # Only sync when announcing
+            import threading
+            # Run in background to prevent UI hang
+            threading.Thread(target=sync_batch_grades, args=(batch, curr.get('current_sem_type', 'odd'))).start()
+
+        flash(f"Result announcement updated for {batch.upper()}. Grade syncing started in background.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('admin_result_management_page'))
+
+@app.route("/admin/toggle-semester", methods=["POST"])
+@login_required(role='admin')
+def toggle_semester_type():
+    batch = request.form.get('batch') # 'all' or specific batch like 'b1'
+    sem_type = request.form.get('sem_type') # odd, even
+    if not batch or not sem_type:
+        flash("Invalid request.", "danger")
+        return redirect(url_for('admin_result_management_page'))
+        
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/result_announcements"
+        payload = {'current_sem_type': sem_type, 'updated_at': datetime.datetime.now().isoformat()}
+        
+        if batch == 'all':
+            requests.patch(url, headers=SUPABASE_HEADERS, params={'batch': 'neq.0'}, json=payload, timeout=10)
+            flash(f"ALL batches set to {sem_type.upper()} semester.", "success")
+        else:
+            requests.patch(url, headers=SUPABASE_HEADERS, params={'batch': f'eq.{batch}'}, json=payload, timeout=10)
+            flash(f"Semester set to {sem_type.upper()} for {batch.upper()}.", "success")
+            
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('admin_result_management_page'))
+
+def sync_batch_grades(batch, sem_type):
+    """Optimized batch grade synchronization using dynamic marks tables (marksX vs marksXe)."""
+    print(f"Starting optimized background grade sync for {batch} ({sem_type})...")
+    try:
+        # 1. Determine semester number and table name
+        sem_map = {
+            ('b1', 'odd'): 1, ('b1', 'even'): 2,
+            ('b2', 'odd'): 3, ('b2', 'even'): 4,
+            ('b3', 'odd'): 5, ('b3', 'even'): 6,
+            ('b4', 'odd'): 7, ('b4', 'even'): 8,
+        }
+        sem_num = sem_map.get((batch, sem_type), 1)
+        
+        # Determine table: b1+odd -> marks1, b1+even -> marks1e
+        marks_table = f"marks{batch[1]}"
+        if sem_type == 'even':
+            marks_table += "e"
+        
+        print(f"Syncing from table: {marks_table}")
+        
+        # 2. Fetch all students, all marks, and all existing grades
+        # Fetch Students
+        std_resp = requests.get(get_supabase_rest_url(batch), headers=SUPABASE_HEADERS, timeout=15)
+        if not std_resp.ok: return
+        students = std_resp.json()
+        
+        # Fetch ALL Marks for this specific semester table
+        marks_resp = requests.get(f"{SUPABASE_URL}/rest/v1/{marks_table}", headers=SUPABASE_HEADERS, timeout=15)
+        if not marks_resp.ok: 
+            print(f"Failed to fetch from {marks_table}: {marks_resp.text}")
+            return
+        all_marks_list = marks_resp.json()
+        
+        # Fetch ALL Existing Grades
+        grades_resp = requests.get(f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}", headers=SUPABASE_HEADERS, timeout=15)
+        if not grades_resp.ok: return
+        all_grades_list = grades_resp.json()
+        
+        # 3. Organize data by Roll Number
+        from collections import defaultdict
+        marks_by_roll = defaultdict(list)
+        for m in all_marks_list:
+            marks_by_roll[m['roll_no']].append(m)
+            
+        grades_by_roll = {g['roll_no']: g for g in all_grades_list}
+        
+        upsert_payloads = []
+        
+        # 4. Calculate for every student
+        for student in students:
+            roll = student['roll_no']
+            marks = marks_by_roll.get(roll, [])
+            
+            # If no marks in this specific sem table, we can't calculate a new SGPA
+            if not marks: continue
+            
+            total_score = 0
+            total_credits = 0
+            for m in marks:
+                internal = float(m.get('internal_marks') or 0)
+                endsem = float(m.get('endsem') or 0)
+                credits = int(m.get('credits') or 4)
+                point = (internal + endsem) / 10.0
+                total_score += (point * credits)
+                total_credits += credits
+            
+            if total_credits > 0:
+                sgpa = round(total_score / total_credits, 2)
+                
+                # Get existing grade record or create new
+                g_data = grades_by_roll.get(roll, {'roll_no': roll})
+                g_data[f'sgpa_sem{sem_num}'] = sgpa
+                g_data[f'total_credits_sem{sem_num}'] = total_credits
+                
+                # Calculate CGPA across ALL semesters in the g_data object
+                tp = 0
+                tc = 0
+                for i in range(1, 9):
+                    s = g_data.get(f'sgpa_sem{i}')
+                    c = g_data.get(f'total_credits_sem{i}')
+                    if s and c:
+                        tp += (float(s) * int(c))
+                        tc += int(c)
+                
+                cgpa = round(tp / tc, 2) if tc > 0 else 0
+                
+                # Prepare Upsert Object
+                payload = {
+                    'roll_no': roll,
+                    f'sgpa_sem{sem_num}': sgpa,
+                    f'total_credits_sem{sem_num}': total_credits,
+                    'cgpa': cgpa
+                }
+                upsert_payloads.append(payload)
+        
+        # 5. Batch Upsert to Supabase
+        if upsert_payloads:
+            headers = SUPABASE_HEADERS.copy()
+            headers['Prefer'] = 'resolution=merge-duplicates'
+            upsert_resp = requests.post(
+                f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}", 
+                headers=headers, 
+                json=upsert_payloads, 
+                timeout=20
+            )
+            if not upsert_resp.ok:
+                print(f"Batch upsert failed: {upsert_resp.text}")
+                
+        print(f"Optimized grade sync finished for {batch} using {marks_table}. {len(upsert_payloads)} records updated.")
+    except Exception as e:
+        print(f"Critical error in optimized sync_batch_grades: {e}")
+
+def recalculate_cgpa(roll_no):
+    """Calculates CGPA across all semesters for a student (Fallback/Manual)."""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{GRADES_TABLE}"
+        params = {'roll_no': f'eq.{roll_no}'}
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        if not resp.ok or not resp.json():
+            print(f"No grade record found for {roll_no}")
+            return
+            
+        data = resp.json()[0]
+        total_points = 0
+        total_credits = 0
+        
+        for i in range(1, 9):
+            sgpa = data.get(f'sgpa_sem{i}')
+            credits = data.get(f'total_credits_sem{i}')
+            if sgpa and credits:
+                total_points += (float(sgpa) * int(credits))
+                total_credits += int(credits)
+        
+        if total_credits > 0:
+            cgpa = round(total_points / total_credits, 2)
+            requests.patch(url, headers=SUPABASE_HEADERS, params=params, json={'cgpa': cgpa}, timeout=10)
+            
+    except Exception as e:
+        print(f"Error recalculating CGPA for {roll_no}: {e}")
+
+# --- END: BATCH PROMOTION & BACKLOG ROUTES ---
+
+# --- HOSTEL & WARDEN MANAGEMENT ROUTES ---
+
+@app.route("/student/hostel")
+@login_required(role='student')
+def student_hostel_page():
+    user = session.get('user')
+    roll_no = user.get('roll_no')
+    
+    hostel_info = None
+    warden_info = None
+    complaints = []
+    gate_passes = []
+    
+    try:
+        # 1. Fetch Student Assignment
+        url_assign = get_supabase_rest_url(HOSTEL_ASSIGNMENTS_TABLE)
+        # Ensure roll_no is lowercased for the search
+        search_roll = roll_no.lower() if roll_no else ""
+        resp_assign = requests.get(url_assign, headers=SUPABASE_HEADERS, params={'roll_no': f'eq.{search_roll}'}, timeout=10)
+        if resp_assign.ok and resp_assign.json():
+            hostel_info = resp_assign.json()[0]
+            hostel_name = hostel_info['hostel_name']
+            
+            # 2. Fetch Warden for this hostel
+            url_warden = get_supabase_rest_url(WARDENS_TABLE)
+            resp_warden = requests.get(url_warden, headers=SUPABASE_HEADERS, params={'hostel_name': f'eq.{hostel_name}'}, timeout=10)
+            if resp_warden.ok and resp_warden.json():
+                warden_email = resp_warden.json()[0]['teacher_email']
+                
+                # Fetch warden details from teacher table
+                url_t = get_supabase_rest_url(TEACHER_TABLE)
+                # Select name, email, and phone
+                params_t = {'select': 'teacher_name,teacher_email,teacher_phone', 'teacher_email': f'eq.{warden_email}'}
+                resp_t = requests.get(url_t, headers=SUPABASE_HEADERS, params=params_t, timeout=10)
+                if resp_t.ok and resp_t.json():
+                    warden_info = resp_t.json()[0]
+            
+            # 3. Fetch Student Complaints
+            url_comp = get_supabase_rest_url(HOSTEL_COMPLAINTS_TABLE)
+            resp_comp = requests.get(url_comp, headers=SUPABASE_HEADERS, params={'roll_no': f'eq.{search_roll}', 'order': 'created_at.desc'}, timeout=10)
+            if resp_comp.ok:
+                complaints = resp_comp.json()
+
+            # 4. Fetch Student Gate Passes
+            url_gp = get_supabase_rest_url(GATE_PASSES_TABLE)
+            resp_gp = requests.get(url_gp, headers=SUPABASE_HEADERS, params={'roll_no': f'eq.{search_roll}', 'order': 'created_at.desc'}, timeout=10)
+            if resp_gp.ok:
+                gate_passes = resp_gp.json()
+                
+    except Exception as e:
+        print(f"Error fetching hostel info: {e}")
+        flash("Could not load hostel information.", "warning")
+
+    return render_template("hostel_student.html", user=user, hostel=hostel_info, warden=warden_info, complaints=complaints, gate_passes=gate_passes)
+
+@app.route("/student/hostel/complain", methods=["POST"])
+@login_required(role='student')
+def submit_hostel_complaint():
+    user = session.get('user')
+    roll_no = user.get('roll_no')
+    message = request.form.get('message', '').strip()
+    hostel_name = request.form.get('hostel_name')
+
+    if not message or not hostel_name:
+        flash("Complaint message cannot be empty.", "danger")
+        return redirect(url_for('student_hostel_page'))
+
+    try:
+        url = get_supabase_rest_url(HOSTEL_COMPLAINTS_TABLE)
+        payload = {
+            'roll_no': roll_no.lower() if roll_no else "",
+            'hostel_name': hostel_name,
+            'message': message,
+            'status': 'pending'
+        }
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash("Complaint submitted successfully to your warden.", "success")
+    except Exception as e:
+        flash(f"Error submitting complaint: {str(e)}", "danger")
+
+    return redirect(url_for('student_hostel_page'))
+
+@app.route("/student/hostel/gate-pass", methods=["POST"])
+@login_required(role='student')
+def request_gate_pass():
+    user = session.get('user')
+    roll_no = user.get('roll_no')
+    hostel_name = request.form.get('hostel_name')
+    reason = request.form.get('reason', '').strip()
+    out_date = request.form.get('out_date')
+    out_time = request.form.get('out_time')
+    in_date = request.form.get('in_date')
+    in_time = request.form.get('in_time')
+
+    if not all([hostel_name, reason, out_date, out_time]):
+        flash("All required fields must be filled.", "danger")
+        return redirect(url_for('student_hostel_page'))
+
+    try:
+        url = get_supabase_rest_url(GATE_PASSES_TABLE)
+        payload = {
+            'roll_no': roll_no.lower() if roll_no else "",
+            'hostel_name': hostel_name,
+            'reason': reason,
+            'out_date': out_date,
+            'out_time': out_time,
+            'in_date': in_date if in_date else None,
+            'in_time': in_time if in_time else None,
+            'status': 'pending'
+        }
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash("Gate pass request submitted successfully.", "success")
+    except Exception as e:
+        flash(f"Error requesting gate pass: {str(e)}", "danger")
+
+    return redirect(url_for('student_hostel_page'))
+
+@app.route("/teacher/warden/gate-pass/approve/<int:id>", methods=["POST"])
+@login_required(role='teacher')
+def approve_gate_pass(id):
+    user = session.get('user')
+    teacher_email = user.get('teacher_email')
+    status = request.form.get('status', 'approved') # approved or rejected
+
+    try:
+        url = get_supabase_rest_url(GATE_PASSES_TABLE)
+        params = {'id': f'eq.{id}'}
+        payload = {
+            'status': status,
+            'approved_by': teacher_email,
+            'approved_at': datetime.datetime.now().isoformat()
+        }
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash(f"Gate pass {status} successfully.", "success")
+    except Exception as e:
+        flash(f"Error updating gate pass: {str(e)}", "danger")
+    return redirect(url_for('warden_dashboard'))
+
+@app.route("/student/hostel/gate-pass/print/<int:id>")
+@login_required(role='student')
+def print_gate_pass(id):
+    user = session.get('user')
+    roll_no = user.get('roll_no').lower()
+
+    try:
+        url = get_supabase_rest_url(GATE_PASSES_TABLE)
+        params = {'id': f'eq.{id}', 'roll_no': f'eq.{roll_no}'}
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        if resp.ok and resp.json():
+            gate_pass = resp.json()[0]
+            if gate_pass['status'] != 'approved':
+                flash("Gate pass is not approved yet.", "warning")
+                return redirect(url_for('student_hostel_page'))
+            
+            # Fetch warden name for the printout
+            warden_email = gate_pass['approved_by']
+            warden_name = "Warden"
+            if warden_email:
+                url_t = get_supabase_rest_url(TEACHER_TABLE)
+                resp_t = requests.get(url_t, headers=SUPABASE_HEADERS, params={'teacher_email': f'eq.{warden_email}', 'select': 'teacher_name'}, timeout=5)
+                if resp_t.ok and resp_t.json():
+                    warden_name = resp_t.json()[0]['teacher_name']
+
+            return render_template("gate_pass_print.html", gate_pass=gate_pass, user=user, warden_name=warden_name)
+        else:
+            flash("Gate pass not found.", "danger")
+    except Exception as e:
+        flash(f"Error fetching gate pass: {str(e)}", "danger")
+
+    return redirect(url_for('student_hostel_page'))
+
+@app.route("/teacher/warden")
+@login_required(role='teacher')
+def warden_dashboard():
+    user = session.get('user')
+    teacher_email = user.get('teacher_email')
+    
+    # Re-verify warden status to ensure session is up to date
+    hostel_name = None
+    try:
+        url_w = get_supabase_rest_url(WARDENS_TABLE)
+        resp_w = requests.get(url_w, headers=SUPABASE_HEADERS, params={'teacher_email': f'eq.{teacher_email}'}, timeout=5)
+        if resp_w.ok and resp_w.json():
+            hostel_name = resp_w.json()[0].get('hostel_name')
+            session['user']['is_warden'] = True
+            session['user']['hostel_name'] = hostel_name
+    except Exception as e:
+        print(f"Error verifying warden status: {e}")
+
+    if not hostel_name:
+        flash("Access Denied: You are not assigned as a warden for any hostel.", "danger")
+        return redirect(url_for('index'))
+    
+    residents = []
+    complaints = []
+    gate_passes = []
+    
+    try:
+        # 1. Fetch Residents
+        url_res = get_supabase_rest_url(HOSTEL_ASSIGNMENTS_TABLE)
+        resp_res = requests.get(url_res, headers=SUPABASE_HEADERS, params={'hostel_name': f'eq.{hostel_name}'}, timeout=10)
+        if resp_res.ok:
+            residents = resp_res.json()
+            
+        # 2. Fetch Complaints
+        url_comp = get_supabase_rest_url(HOSTEL_COMPLAINTS_TABLE)
+        resp_comp = requests.get(url_comp, headers=SUPABASE_HEADERS, params={'hostel_name': f'eq.{hostel_name}', 'order': 'created_at.desc'}, timeout=10)
+        if resp_comp.ok:
+            complaints = resp_comp.json()
+
+        # 3. Fetch Gate Passes
+        url_gp = get_supabase_rest_url(GATE_PASSES_TABLE)
+        resp_gp = requests.get(url_gp, headers=SUPABASE_HEADERS, params={'hostel_name': f'eq.{hostel_name}', 'order': 'created_at.desc'}, timeout=10)
+        if resp_gp.ok:
+            gate_passes = resp_gp.json()
+    except Exception as e:
+        print(f"Error loading warden data: {e}")
+
+    # Fetch all students for the searchable assignment dropdown
+    all_students = []
+    try:
+        for batch in STUDENT_TABLES:
+            url_s = get_supabase_rest_url(batch)
+            resp_s = requests.get(url_s, headers=SUPABASE_HEADERS, params={'select': 'roll_no,student_name'}, timeout=10)
+            if resp_s.ok:
+                batch_students = resp_s.json()
+                for s in batch_students:
+                    s['display'] = f"{s['student_name']} ({s['roll_no'].upper()}) - {batch.upper()}"
+                all_students.extend(batch_students)
+    except Exception as e:
+        print(f"Error fetching students for warden: {e}")
+
+    return render_template("warden_dashboard.html", 
+                           user=user, 
+                           residents=residents, 
+                           complaints=complaints, 
+                           gate_passes=gate_passes,
+                           hostel_name=hostel_name,
+                           all_students=all_students,
+                           supabase_url=SUPABASE_URL,
+                           supabase_key=SUPABASE_ANON_KEY)
+
+@app.route("/teacher/warden/complaint/seen/<int:id>", methods=["POST"])
+@login_required(role='teacher')
+def mark_complaint_seen(id):
+    try:
+        url = get_supabase_rest_url(HOSTEL_COMPLAINTS_TABLE)
+        params = {'id': f'eq.{id}'}
+        payload = {'status': 'seen'}
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        resp.raise_for_status()
+        flash("Complaint marked as seen.", "success")
+    except Exception as e:
+        flash(f"Error updating complaint: {str(e)}", "danger")
+    return redirect(url_for('warden_dashboard'))
+
+# --- Admin Hostel Management ---
+@app.route("/admin/hostels")
+@login_required(role='admin')
+def admin_hostel_management():
+    # Admin can assign wardens and students here
+    all_teachers = []
+    all_students = []
+    try:
+        # Fetch teachers
+        url_t = get_supabase_rest_url(TEACHER_TABLE)
+        resp_t = requests.get(url_t, headers=SUPABASE_HEADERS, params={'select': 'teacher_name,teacher_email', 'order': 'teacher_name.asc'}, timeout=10)
+        if resp_t.ok:
+            all_teachers = resp_t.json()
+
+        # Fetch all students from all batches
+        for batch in STUDENT_TABLES:
+            url_s = get_supabase_rest_url(batch)
+            resp_s = requests.get(url_s, headers=SUPABASE_HEADERS, params={'select': 'roll_no,student_name'}, timeout=10)
+            if resp_s.ok:
+                batch_students = resp_s.json()
+                # Add batch info to help identify students
+                for s in batch_students:
+                    s['display'] = f"{s['student_name']} ({s['roll_no'].upper()}) - {batch.upper()}"
+                all_students.extend(batch_students)
+
+    except Exception as e:
+        print(f"Error fetching data for hostel admin: {e}")
+
+    return render_template("admin_hostel.html", 
+                           teachers=all_teachers,
+                           all_students=all_students,
+                           supabase_url=SUPABASE_URL, 
+                           supabase_key=SUPABASE_ANON_KEY)
+
+# --- HOD PORTAL ROUTES ---
+
+@app.route("/hod/dashboard")
+@login_required(role='teacher')
+def hod_dashboard():
+    user = session.get('user')
+    if not user.get('is_hod'):
+        flash("Access Denied: You are not assigned as HOD.", "danger")
+        return redirect(url_for('index'))
+    
+    dept = user.get('hod_department')
+    return render_template("hod_dashboard.html", user=user, department=dept)
+
+@app.route("/hod/manage-marks")
+@login_required(role='teacher')
+def hod_manage_marks():
+    user = session.get('user')
+    if not user.get('is_hod'):
+        flash("Access Denied.", "danger")
+        return redirect(url_for('index'))
+    
+    dept = user.get('hod_department')
+    all_teachers = fetch_all_teachers()
+    
+    return render_template(
+        "hod_marks.html",
+        user=user,
+        department=dept,
+        all_teachers_json=json.dumps(all_teachers),
+        marks_tables_json=json.dumps(MARKS_TABLES),
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
+    )
+
+@app.route("/hod/manage-attendance")
+@login_required(role='teacher')
+def hod_manage_attendance():
+    user = session.get('user')
+    if not user.get('is_hod'):
+        flash("Access Denied.", "danger")
+        return redirect(url_for('index'))
+    
+    dept = user.get('hod_department')
+    all_teachers = fetch_all_teachers()
+    
+    return render_template(
+        "hod_attendance.html",
+        user=user,
+        department=dept,
+        all_teachers_json=json.dumps(all_teachers),
+        attendance_tables_json=json.dumps(ATTENDANCE_TABLES),
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
+    )
+
+@app.route("/hod/assign-subject")
+@login_required(role='teacher')
+def hod_assign_subject():
+    user = session.get('user')
+    if not user.get('is_hod'):
+        flash("Access Denied.", "danger")
+        return redirect(url_for('index'))
+    
+    dept = user.get('hod_department')
+    all_teachers = fetch_all_teachers()
+    
+    return render_template(
+        "hod_assign_subject.html",
+        user=user,
+        department=dept,
+        all_teachers=all_teachers,
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_ANON_KEY
+    )
+
+# --- MOBILE API ROUTES ---
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.json
+    username = data.get("username")
+    password = data.get("password")
+    
+    if not username or not password:
+        return jsonify({"message": "Username and password required"}), 400
+        
+    user_data = fetch_and_verify_user(username, password)
+    if user_data:
+        # For mobile, we just return the user data. In a real app, use JWT.
+        return jsonify({
+            "message": "Login successful",
+            "token": "dummy-token",
+            "user": user_data
+        })
+    else:
+        return jsonify({"message": "Invalid credentials"}), 401
+
+@app.route("/api/dashboard", methods=["POST"])
+def api_dashboard():
+    data = request.json
+    user = data.get("user", {})
+    role = user.get("role")
+    
+    events_data = []
+    holidays_data = []
+    daily_schedule = []
+    today_is_holiday = False
+    
+    IST = ZoneInfo("Asia/Kolkata")
+    today = datetime.datetime.now(IST) 
+    today_date_str = today.strftime('%Y-%m-%d')
+    today_str = today.strftime('%a').upper()
+    
+    try:
+        # Fetch Events
+        url_events = get_supabase_rest_url(EVENTS_TABLE)
+        params_events = {'select': '*', 'date': f'gte.{today_date_str}', 'order': 'date.asc', 'limit': 5}
+        resp_events = requests.get(url_events, headers=SUPABASE_HEADERS, params=params_events, timeout=5)
+        if resp_events.ok: events_data = resp_events.json()
+
+        # Fetch Holidays
+        url_holidays = get_supabase_rest_url(HOLIDAYS_TABLE)
+        params_holidays = {'select': '*', 'date': f'gte.{today_date_str}', 'order': 'date.asc'}
+        resp_holidays = requests.get(url_holidays, headers=SUPABASE_HEADERS, params=params_holidays, timeout=5)
+        if resp_holidays.ok:
+            holidays_data = resp_holidays.json()
+            for h in holidays_data:
+                if h.get('date') == today_date_str:
+                    today_is_holiday = True
+                    break
+
+        # Schedule
+        if role == 'student':
+            batch = user.get('batch')
+            current_month = today.month
+            current_semester = get_current_semester(batch, current_month)
+            if current_semester:
+                url_tt = get_supabase_rest_url(TIMETABLE_TABLE)
+                params_tt = {
+                    'select': 'start_time,end_time,venue,courses(course_name,course_code)',
+                    'semester': f'eq.{current_semester}',
+                    'day_of_week': f'eq.{today_str}',
+                    'order': 'start_time.asc'
+                }
+                resp_tt = requests.get(url_tt, headers=SUPABASE_HEADERS, params=params_tt, timeout=5)
+                if resp_tt.ok:
+                    for entry in resp_tt.json():
+                        course = entry.get('courses')
+                        course_details = f"{course['course_name']} ({course['course_code']})" if course else "Unknown"
+                        daily_schedule.append(f"{entry['start_time']} - {entry['end_time']} : {course_details} ({entry.get('venue', 'N/A')})")
+        elif role == 'teacher':
+            # For teacher, fetch courses they assist in
+            url_c = get_supabase_rest_url(COURSE_TABLE)
+            params_c = {'select': 'course_name,course_code,semester', 'assisting_teacher': f"eq.{user.get('username')}"}
+            resp_c = requests.get(url_c, headers=SUPABASE_HEADERS, params=params_c, timeout=5)
+            if resp_c.ok:
+                assigned_courses = resp_c.json()
+                codes = [c['course_code'] for c in assigned_courses]
+                if codes:
+                    url_tt = get_supabase_rest_url(TIMETABLE_TABLE)
+                    # Filter by today and their subjects
+                    params_tt = {
+                        'select': 'start_time,end_time,venue,subject_code',
+                        'day_of_week': f'eq.{today_str}',
+                        'subject_code': f'in.({",".join(codes)})',
+                        'order': 'start_time.asc'
+                    }
+                    resp_tt = requests.get(url_tt, headers=SUPABASE_HEADERS, params=params_tt, timeout=5)
+                    if resp_tt.ok:
+                        for entry in resp_tt.json():
+                            daily_schedule.append(f"{entry['start_time']} - {entry['end_time']} : {entry['subject_code']} ({entry.get('venue', 'N/A')})")
+
+    except Exception as e:
+        print(f"API Dashboard error: {e}")
+
+    return jsonify({
+        "events": [Event(None, e['date'], e['description']).__dict__ for e in events_data],
+        "holidays": [Holiday(None, h['date'], h['description']).__dict__ for h in holidays_data],
+        "schedule": daily_schedule,
+        "is_holiday": today_is_holiday
+    })
+
+# --- Teacher Specific API Routes ---
+
+@app.route("/api/teacher/courses", methods=["POST"])
+def api_teacher_courses():
+    data = request.json
+    username = data.get("username")
+    fetch_all = data.get("all") == "true"
+    
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        if fetch_all:
+            params = {'select': 'course_code,course_name,semester,credits'}
+        else:
+            if not username: return jsonify([]), 400
+            params = {'select': 'course_code,course_name,semester,credits', 'assisting_teacher': f'eq.{username}'}
+            
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        return jsonify(resp.json() if resp.ok else [])
+    except: return jsonify([]), 500
+
+@app.route("/api/teacher/students", methods=["POST"])
+def api_teacher_students():
+    data = request.json
+    batch = data.get("batch") # e.g. b1, b2
+    if not batch or batch not in STUDENT_TABLES: return jsonify([]), 400
+    try:
+        url = get_supabase_rest_url(batch)
+        params = {'select': 'roll_no,student_name', 'order': 'roll_no.asc'}
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        return jsonify(resp.json() if resp.ok else [])
+    except: return jsonify([]), 500
+
+@app.route("/api/teacher/attendance/save", methods=["POST"])
+def api_save_attendance():
+    data = request.json
+    batch = data.get("batch")
+    records = data.get("records") # List of {roll_no, status, date, subject_code}
+    
+    att_table = determine_attendance_table(batch)
+    if not att_table or not records: return jsonify({"success": False}), 400
+    
+    try:
+        url = get_supabase_rest_url(att_table)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'return=minimal'
+        resp = requests.post(url, headers=headers, json=records, timeout=15)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+@app.route("/api/teacher/marks/save", methods=["POST"])
+def api_save_marks():
+    data = request.json
+    batch = data.get("batch")
+    marks_data = data.get("marks") # List of {roll_no, subject_code, mid1, mid2, endsem, credits}
+    
+    marks_table = get_marks_table_for_student(marks_data[0]['roll_no']) if marks_data else None
+    if not marks_table or not marks_data: return jsonify({"success": False}), 400
+    
+    try:
+        url = get_supabase_rest_url(marks_table)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'resolution=merge-duplicates' # Upsert
+        resp = requests.post(url, headers=headers, json=marks_data, timeout=15)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+# --- HOD Specific API Routes ---
+
+@app.route("/api/hod/performance", methods=["POST"])
+def api_hod_performance():
+    data = request.json
+    dept = data.get("department")
+    if not dept: return jsonify({"attendance": [], "marks": []}), 400
+    
+    # This is a complex query. For simplicity, we'll return summarized data
+    # or just allow them to search for a student's performance.
+    roll_no = data.get("roll_no")
+    if roll_no:
+        # Fetch performance for specific student
+        # (This logic can be expanded based on what the web does)
+        return jsonify({"message": "Student performance fetched"})
+        
+    return jsonify({"message": "Department overview fetched"})
+
+@app.route("/api/hod/assign-subject", methods=["POST"])
+def api_hod_assign_subject():
+    data = request.json
+    course_code = data.get("course_code")
+    teacher_username = data.get("teacher_username")
+    
+    if not course_code or not teacher_username:
+        return jsonify({"success": False, "message": "Missing data"}), 400
+        
+    try:
+        url = get_supabase_rest_url(COURSE_TABLE)
+        params = {'course_code': f'eq.{course_code}'}
+        payload = {'assisting_teacher': teacher_username}
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+# --- Generic Management API ---
+
+@app.route("/api/events/add", methods=["POST"])
+def api_add_event():
+    data = request.json
+    # {date, description}
+    try:
+        url = get_supabase_rest_url(EVENTS_TABLE)
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=data, timeout=10)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+@app.route("/api/holidays/add", methods=["POST"])
+def api_add_holiday():
+    data = request.json
+    # {date, description}
+    try:
+        url = get_supabase_rest_url(HOLIDAYS_TABLE)
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=data, timeout=10)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+# --- Warden Specific API Routes ---
+
+@app.route("/api/warden/assign-room", methods=["POST"])
+def api_warden_assign_room():
+    data = request.json
+    # {roll_no, hostel_name, room_number}
+    try:
+        url = get_supabase_rest_url(HOSTEL_ASSIGNMENTS_TABLE)
+        headers = SUPABASE_HEADERS.copy()
+        headers['Prefer'] = 'resolution=merge-duplicates' # Upsert
+        resp = requests.post(url, headers=headers, json=data, timeout=10)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+@app.route("/api/warden/search-student", methods=["POST"])
+def api_warden_search_student():
+    data = request.json
+    query = data.get("query", "").lower()
+    if not query: return jsonify([]), 400
+    
+    results = []
+    try:
+        for batch in STUDENT_TABLES:
+            url = get_supabase_rest_url(batch)
+            # Search by roll_no or name
+            params = {'or': f'(roll_no.ilike.*{query}*,student_name.ilike.*{query}*)', 'limit': 10}
+            resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+            if resp.ok:
+                for s in resp.json():
+                    s['batch'] = batch
+                    results.append(s)
+        return jsonify(results)
+    except: return jsonify([]), 500
+
+@app.route("/api/notifications/send", methods=["POST"])
+def api_send_notification():
+    data = request.json
+    # {sender_username, sender_name, message, target_batch, target_department}
+    try:
+        url = get_supabase_rest_url(NOTIFICATIONS_TABLE)
+        resp = requests.post(url, headers=SUPABASE_HEADERS, json=data, timeout=10)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
+# --- Warden/Gatepass API ---
+
+@app.route("/api/warden/gatepasses", methods=["POST"])
+def api_warden_gatepasses():
+    data = request.json
+    hostel_name = data.get("hostel_name")
+    if not hostel_name: return jsonify([]), 400
+    try:
+        url = get_supabase_rest_url(GATE_PASSES_TABLE)
+        params = {'hostel_name': f'eq.{hostel_name}', 'status': 'eq.pending', 'order': 'created_at.desc'}
+        resp = requests.get(url, headers=SUPABASE_HEADERS, params=params, timeout=10)
+        return jsonify(resp.json() if resp.ok else [])
+    except: return jsonify([]), 500
+
+@app.route("/api/warden/gatepass/update", methods=["POST"])
+def api_update_gatepass():
+    data = request.json
+    pass_id = data.get("id")
+    status = data.get("status") # approved/rejected
+    teacher_email = data.get("teacher_email")
+    
+    if not pass_id: return jsonify({"success": False}), 400
+    
+    try:
+        url = get_supabase_rest_url(GATE_PASSES_TABLE)
+        params = {'id': f'eq.{pass_id}'}
+        payload = {
+            'status': status,
+            'approved_by': teacher_email,
+            'approved_at': datetime.datetime.now().isoformat()
+        }
+        resp = requests.patch(url, headers=SUPABASE_HEADERS, params=params, json=payload, timeout=10)
+        return jsonify({"success": resp.ok})
+    except: return jsonify({"success": False}), 500
+
 
 # --- Error Handling ---
 @app.errorhandler(404)
@@ -1768,7 +2926,7 @@ def internal_server_error(e):
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
 
 
 

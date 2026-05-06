@@ -1,0 +1,559 @@
+{% extends "layout.html" %}
+
+{% block title %}Batch Promotion & Backlog Management{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --danger-start: #f87171;
+            --danger-end: #ef4444;
+            --shadow-base: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .promo-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .header-section {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header-section h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-section p {
+            color: var(--subtle-text);
+            font-size: 1.1rem;
+        }
+
+        /* Batch Overview Cards */
+        .batch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .batch-card {
+            background: var(--secondary-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: var(--shadow-base);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(66, 153, 225, 0.1);
+        }
+
+        .batch-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .batch-card .count {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--accent-end);
+            margin: 0.5rem 0;
+        }
+
+        .batch-card .label {
+            font-weight: 600;
+            color: var(--subtle-text);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Promotion Control */
+        .promotion-control {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            text-align: center;
+            margin-bottom: 4rem;
+            border: 2px dashed var(--danger-start);
+            box-shadow: var(--shadow-base);
+        }
+
+        .promotion-control h2 {
+            color: var(--danger-end);
+            margin-bottom: 1rem;
+        }
+
+        .btn-promote {
+            background: linear-gradient(90deg, var(--danger-start), var(--danger-end));
+            color: white;
+            padding: 1rem 2.5rem;
+            border-radius: 2rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn-promote:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+        }
+
+        /* Tabs/Sections */
+        .mgmt-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-trigger {
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 0.5rem 0.5rem 0 0;
+            transition: all 0.3s ease;
+            color: var(--subtle-text);
+        }
+
+        .tab-trigger.active {
+            background: var(--accent-start);
+            color: white;
+        }
+
+        .mgmt-section {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .mgmt-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Tables & Forms */
+        .data-table-container {
+            background: var(--secondary-bg);
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: var(--shadow-base);
+            margin-bottom: 2rem;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: var(--card-bg);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        .data-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--subtle-text);
+        }
+
+        .form-card {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+        }
+
+        .btn-add {
+            background: var(--accent-end);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal-btns {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .btn-cancel {
+            background: #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="promo-container">
+    <div class="header-section">
+        <h1>Batch Promotion System</h1>
+        <p>Advance student cohorts and manage academic status exceptions.</p>
+    </div>
+
+    <!-- Batch Counts -->
+    <div class="batch-grid">
+        {% for batch in ALL_STUDENT_TABLES %}
+        <div class="batch-card">
+            <div class="label">{{ batch|upper }}</div>
+            <div class="count">{{ batch_counts.get(batch, 0) }}</div>
+            <div class="subtle-text">Students</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Promotion Trigger -->
+    <div class="promotion-control">
+        <i class="fas fa-exclamation-triangle fa-3x" style="color: var(--danger-start); margin-bottom: 1rem;"></i>
+        <h2>Advance Academic Year</h2>
+        <p>This will promote students from <b>B1 &rarr; B2</b>, <b>B2 &rarr; B3</b>, <b>B3 &rarr; B4</b>, and <b>B4 &rarr; Alumni</b>.<br>
+        Students in the "Year-Back" list will be excluded from this movement.</p>
+        <button class="btn-promote" id="open-promo-modal">
+            <i class="fas fa-rocket"></i> PROMOTE ALL BATCHES
+        </button>
+    </div>
+
+    <!-- Management Tabs -->
+    <div class="mgmt-tabs">
+        <div class="tab-trigger active" data-target="year-back">Year-Back Students</div>
+        <div class="tab-trigger" data-target="backlogs">Active Backlogs</div>
+        <div class="tab-trigger" data-target="announcements">Result Announcements</div>
+        <div class="tab-trigger" data-target="history">Promotion History</div>
+    </div>
+
+    <!-- Year-Back Section -->
+    <div class="mgmt-section active" id="year-back">
+        <div class="form-card">
+            <h3>Add Student to Year-Back</h3>
+            <form action="{{ url_for('add_year_back') }}" method="POST">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Roll Number</label>
+                        <input type="text" name="roll_no" placeholder="e.g. b24001" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Current Batch</label>
+                        <select name="current_batch" required>
+                            {% for batch in STUDENT_TABLES %}
+                            <option value="{{ batch }}">{{ batch|upper }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Reason</label>
+                        <input type="text" name="reason" placeholder="e.g. Medical Leave">
+                    </div>
+                </div>
+                <button type="submit" class="btn-add">Add to List</button>
+            </form>
+        </div>
+
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Roll No</th>
+                        <th>Name</th>
+                        <th>Current Batch</th>
+                        <th>Reason</th>
+                        <th>Added On</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in year_back_students %}
+                    <tr>
+                        <td>{{ student.roll_no }}</td>
+                        <td>{{ student.student_name or '-' }}</td>
+                        <td>{{ student.current_batch|upper }}</td>
+                        <td>{{ student.reason or '-' }}</td>
+                        <td>{{ student.created_at[:10] }}</td>
+                        <td>
+                            <form action="{{ url_for('remove_year_back', id=student.id) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn-cancel" style="color:red; background:none;"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" style="text-align:center;">No year-back students listed.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Backlogs Section -->
+    <div class="mgmt-section" id="backlogs">
+        <div class="form-card">
+            <h3>Record New Backlog</h3>
+            <form action="{{ url_for('add_backlog') }}" method="POST">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Student Roll No</label>
+                        <input type="text" name="roll_no" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Subject Code</label>
+                        <input type="text" name="subject_code" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Subject Name</label>
+                        <input type="text" name="subject_name">
+                    </div>
+                    <div class="form-group">
+                        <label>Semester</label>
+                        <input type="number" name="semester" min="1" max="8" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Batch</label>
+                        <input type="text" name="batch" placeholder="e.g. b2">
+                    </div>
+                </div>
+                <button type="submit" class="btn-add">Add Backlog</button>
+            </form>
+        </div>
+
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Roll No</th>
+                        <th>Subject</th>
+                        <th>Sem</th>
+                        <th>Batch</th>
+                        <th>Added On</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bl in active_backlogs %}
+                    <tr>
+                        <td>{{ bl.roll_no }}</td>
+                        <td>{{ bl.subject_name }} ({{ bl.subject_code }})</td>
+                        <td>{{ bl.semester }}</td>
+                        <td>{{ bl.batch_when_failed|upper if bl.batch_when_failed else '-' }}</td>
+                        <td>{{ bl.created_at[:10] }}</td>
+                        <td>
+                            <form action="{{ url_for('clear_backlog', id=bl.id) }}" method="POST">
+                                <button type="submit" class="btn-add" style="background:#10b981;">Mark Cleared</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" style="text-align:center;">No active backlogs.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Announcements Section -->
+    <div class="mgmt-section" id="announcements">
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch</th>
+                        <th>Mid Term 1</th>
+                        <th>Mid Term 2</th>
+                        <th>End Semester</th>
+                        <th>Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ann in announcements %}
+                    <tr>
+                        <td>{{ ann.batch|upper }}</td>
+                        <td>
+                            <form action="{{ url_for('announce_result') }}" method="POST">
+                                <input type="hidden" name="batch" value="{{ ann.batch }}">
+                                <input type="hidden" name="exam_type" value="mid1">
+                                <input type="hidden" name="status" value="{{ 'false' if ann.mid1_announced else 'true' }}">
+                                <button type="submit" class="btn-add" style="background: {{ '#ef4444' if ann.mid1_announced else '#10b981' }}; width: 120px;">
+                                    {{ 'Un-announce' if ann.mid1_announced else 'Announce' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td>
+                            <form action="{{ url_for('announce_result') }}" method="POST">
+                                <input type="hidden" name="batch" value="{{ ann.batch }}">
+                                <input type="hidden" name="exam_type" value="mid2">
+                                <input type="hidden" name="status" value="{{ 'false' if ann.mid2_announced else 'true' }}">
+                                <button type="submit" class="btn-add" style="background: {{ '#ef4444' if ann.mid2_announced else '#10b981' }}; width: 120px;">
+                                    {{ 'Un-announce' if ann.mid2_announced else 'Announce' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td>
+                            <form action="{{ url_for('announce_result') }}" method="POST">
+                                <input type="hidden" name="batch" value="{{ ann.batch }}">
+                                <input type="hidden" name="exam_type" value="endsem">
+                                <input type="hidden" name="status" value="{{ 'false' if ann.endsem_announced else 'true' }}">
+                                <button type="submit" class="btn-add" style="background: {{ '#ef4444' if ann.endsem_announced else '#10b981' }}; width: 120px;">
+                                    {{ 'Un-announce' if ann.endsem_announced else 'Announce' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td>{{ ann.updated_at[:16] if ann.updated_at else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p style="color: var(--subtle-text); font-style: italic; margin-top: 1rem;">
+            * <b>Sequence Enforcement:</b> You must announce results in order: Mid 1 &rarr; Mid 2 &rarr; End-Sem. 
+            When a batch is promoted, all statuses are automatically reset to "Announce".
+        </p>
+
+        <!-- Testing Utility -->
+        <div style="margin-top: 3rem; padding: 1.5rem; background: #fff1f2; border: 1px dashed #f43f5e; border-radius: 1rem;">
+            <h3 style="color: #9f1239; font-size: 1.1rem;"><i class="fas fa-flask"></i> Testing Utility</h3>
+            <p style="color: #be123c; font-size: 0.85rem; margin-bottom: 1rem;">
+                <b>Dev Mode:</b> Move ALL students from B2, B3, B4 back to B1 to test the promotion cycle again.
+            </p>
+            <form action="{{ url_for('reset_test_data') }}" method="POST" onsubmit="return confirm('ARE YOU SURE? This will move ALL students back to B1.');">
+                <button type="submit" class="btn-add" style="background: #e11d48; width: auto;">Reset Everything to B1</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- History Section -->
+    <div class="mgmt-section" id="history">
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Promoted By</th>
+                        <th>Promoted</th>
+                        <th>To Alumni</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in promotion_logs %}
+                    <tr>
+                        <td>{{ log.promoted_at[:16] }}</td>
+                        <td>{{ log.promoted_by }}</td>
+                        <td>{{ log.students_promoted }}</td>
+                        <td>{{ log.students_to_alumni }}</td>
+                        <td>{{ log.notes }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" style="text-align:center;">No promotion history found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Promotion Confirmation Modal -->
+<div class="modal" id="promo-modal">
+    <div class="modal-content">
+        <h2 style="color: var(--danger-end);">Confirm Promotion</h2>
+        <p style="margin: 1rem 0;">Are you absolutely sure you want to promote all batches? This action is irreversible and will move student records across tables.</p>
+        <div class="modal-btns">
+            <button class="btn-cancel" id="close-promo-modal">Cancel</button>
+            <form action="{{ url_for('promote_batches') }}" method="POST">
+                <button type="submit" class="btn-promote" style="padding: 0.75rem 1.5rem; font-size: 1rem;">Yes, Execute Promotion</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tab switching logic
+    document.querySelectorAll('.tab-trigger').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab-trigger').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.mgmt-section').forEach(s => s.classList.remove('active'));
+            
+            tab.classList.add('active');
+            document.getElementById(tab.dataset.target).classList.add('active');
+        });
+    });
+
+    // Modal logic
+    const modal = document.getElementById('promo-modal');
+    document.getElementById('open-promo-modal').onclick = () => modal.style.display = 'flex';
+    document.getElementById('close-promo-modal').onclick = () => modal.style.display = 'none';
+    window.onclick = (e) => { if (e.target == modal) modal.style.display = 'none'; }
+</script>
+{% endblock %}
