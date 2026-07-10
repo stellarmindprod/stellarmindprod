@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from flask_cors import CORS
 
 # Import configuration variables
 from config import (
@@ -22,6 +23,7 @@ from config import (
 
 # Initialize Flask App
 app = Flask(__name__)
+CORS(app)
 app.config['SECRET_KEY'] = SECRET_KEY
 
 # --- Helper Functions ---

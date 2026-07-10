@@ -1,14 +1,16 @@
 # stellarminprod/config.py
 
+import os
+
 # --- Supabase Configuration ---
 # Replace with your NEW Supabase project credentials.
 # IMPORTANT: Use environment variables in production!
-SUPABASE_URL = "https://tydclxmzybbflmgxfpwh.supabase.co" # Your NEW project URL
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR5ZGNseG16eWJiZmxtZ3hmcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjA5MjUsImV4cCI6MjA5MTI5NjkyNX0.ZeEOawsnRhyERWjY9y8u05OvRHaoqqvR7Te0KilcVio" # Your NEW project Anon Key
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://tydclxmzybbflmgxfpwh.supabase.co")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR5ZGNseG16eWJiZmxtZ3hmcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjA5MjUsImV4cCI6MjA5MTI5NjkyNX0.ZeEOawsnRhyERWjY9y8u05OvRHaoqqvR7Te0KilcVio")
 # It's generally better practice to use the SERVICE_ROLE_KEY for backend operations,
 # but using ANON_KEY with appropriate RLS (Row Level Security) is also possible.
 # Ensure your RLS policies allow the necessary backend operations.
-SUPABASE_SERVICE_KEY = "sb_secret_Ws613bJqEKwJWs_EO2vPmg_vlHTpEIQ" # Keep this secret!
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "sb_secret_Ws613bJqEKwJWs_EO2vPmg_vlHTpEIQ")
 
 # --- Database Table Names (Based on your provided SQL) ---
 STUDENT_TABLES = ["b1", "b2", "b3", "b4"]
@@ -62,4 +64,4 @@ SUPABASE_HEADERS = {
 # }
 
 # --- Flask App Configuration ---
-SECRET_KEY = "your_very_secret_flask_key_change_this" # Change this for production! Use a strong, random key.
+SECRET_KEY = os.environ.get("SECRET_KEY", "your_very_secret_flask_key_change_this") # Change this for production! Use a strong, random key.
