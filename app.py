@@ -6,6 +6,7 @@ import datetime # Import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
+import bcrypt
 from functools import wraps
 from flask_cors import CORS
 
@@ -155,6 +156,21 @@ def login_required(role=None):
 
 # --- Authentication Logic (MODIFIED) ---
 
+def verify_password_hash(hash_str, password):
+    if not hash_str:
+        return False
+    if hash_str.startswith('$2a$') or hash_str.startswith('$2b$'):
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), hash_str.encode('utf-8'))
+        except Exception as e:
+            print(f"Bcrypt hash error: {e}")
+            return False
+    try:
+        return check_password_hash(hash_str, password)
+    except Exception as e:
+        print(f"Werkzeug hash error: {e}")
+        return False
+
 def fetch_and_verify_user(username, password):
     """Finds user across tables and verifies password."""
     # Assume username could be roll_no (student), username (teacher/admin), or email (parent/student)
@@ -178,7 +194,7 @@ def fetch_and_verify_user(username, password):
             if data and len(data) >= 1:
                 user_data = data[0]
                 # Check password
-                if check_password_hash(user_data.get('student_password', ''), password):
+                if verify_password_hash(user_data.get('student_password', ''), password):
                     user_data.pop('student_password', None)  # Remove hash from session data
                     user_data.pop('parent_password', None)
                     user_data['role'] = 'student'
@@ -203,7 +219,7 @@ def fetch_and_verify_user(username, password):
         data = response.json()
         if data and len(data) == 1:
             user_data = data[0]
-            if check_password_hash(user_data.get('teacher_password', ''), password):
+            if verify_password_hash(user_data.get('teacher_password', ''), password):
                 user_data.pop('teacher_password', None)
                 user_data['role'] = 'teacher'
                 user_data['username'] = user_data.get('username', username_lower) # Ensure username is set
@@ -236,7 +252,7 @@ def fetch_and_verify_user(username, password):
         data = response.json()
         if data and len(data) == 1:
             user_data = data[0]
-            if check_password_hash(user_data.get('password', ''), password):
+            if verify_password_hash(user_data.get('password', ''), password):
                 user_data.pop('password', None)
                 user_data['role'] = 'admin'
                 return user_data
@@ -258,7 +274,7 @@ def fetch_and_verify_user(username, password):
                 parent_data = data[0]
                 # Verify the parent_password
                 # THIS ASSUMES parent_password IS HASHED in the database
-                if check_password_hash(parent_data.get('parent_password', ''), password):
+                if verify_password_hash(parent_data.get('parent_password', ''), password):
                     # Create a session object for the parent
                     user_data = {
                         'role': 'parent',
@@ -282,7 +298,7 @@ def fetch_and_verify_user(username, password):
             data = response.json()
             if data and len(data) == 1:
                 user_data = data[0]
-                if check_password_hash(user_data.get('student_password', ''), password):
+                if verify_password_hash(user_data.get('student_password', ''), password):
                     user_data.pop('student_password', None)
                     user_data.pop('parent_password', None)
                     user_data['role'] = 'student'
