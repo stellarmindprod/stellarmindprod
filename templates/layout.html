@@ -4,17 +4,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}StellarMind Prod{% endblock %}</title>
+    <title>{% block title %}StellarMinds{% endblock %}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <script src="https://unpkg.com/@supabase/supabase-js"></script>
     <style>
+        :root {
+            --primary-bg: #f0f4f8;
+            --secondary-bg: #ffffff;
+            --card-bg: #eaf1f7;
+            --text-color: #1c2b3a;
+            --subtle-text: #6b7a8c;
+            --accent-start: #4299e1;
+            --accent-end: #0087c5;
+            --shadow-light: rgba(0, 0, 0, 0.08);
+            --shadow-heavy: rgba(0, 0, 0, 0.15);
+            --transition-speed: 0.5s;
+        }
+
         /* Base styles adapted from static/style.css */
         body {
             font-family: 'Poppins', sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f0f4f8;
-            color: #1c2b3a;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
             margin: 0;
             line-height: 1.6;
             display: flex;
@@ -66,9 +79,14 @@
             list-style: none;
             padding: 0;
             margin: 0;
+            flex-wrap: wrap; /* allow wrapping on small screens */
         }
 
         /* Added list-style etc */
+        .nav-links li {
+            display: inline-flex;
+            min-width: 0; /* flex shrinking fix */
+        }
         .nav-links a {
             color: #1c2b3a;
             text-decoration: none;
@@ -95,17 +113,56 @@
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 150px;
+            display: inline-block;
+            vertical-align: middle;
         }
 
         /* Footer */
         .footer {
-            background-color: #ffffff;
-            color: #6b7a8c;
+            background-color: var(--secondary-bg);
+            color: var(--subtle-text);
             text-align: center;
-            padding: 1.5rem 1rem;
+            padding: 2rem 1rem;
             margin-top: auto;
-            /* Push footer to bottom */
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 -2px 10px var(--shadow-light);
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .footer-content a {
+            color: var(--accent-start);
+            text-decoration: none;
+            transition: color var(--transition-speed);
+        }
+
+        .footer-content a:hover {
+            color: var(--accent-end);
+        }
+
+        .social-icons {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1.25rem;
+        }
+
+        .social-icons a {
+            font-size: 1.5rem;
+            color: var(--subtle-text);
+            transition: all var(--transition-speed) ease-in-out;
+        }
+
+        .social-icons a:hover {
+            color: var(--accent-end);
+            transform: scale(1.2) translateY(-0.25rem);
         }
 
         /* Flash Messages */
@@ -346,9 +403,9 @@
 <body>
     <nav class="navbar">
         <div class="logo-container">
-            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo-img"
+            <img src="{{ url_for('static', filename='images/ttlogo.jpg') }}" alt="Logo" class="logo-img"
                 onerror="this.onerror=null; this.src='https://placehold.co/40x40/0d6efd/ffffff?text=SM';">
-            <span class="logo-name">StellarMind Prod</span>
+            <span class="logo-name">StellarMinds</span>
         </div>
         <ul class="nav-links"> {# Changed div to ul for semantic correctness #}
             {% if session.user %}
@@ -417,7 +474,17 @@
     </main>
 
     <footer class="footer">
-        <p>&copy; {{ now.year }} StellarMind Prod - NIT Sikkim</p>
+        <div class="footer-content">
+            <p>&copy; {{ now.year }} StellarMinds | NIT Sikkim</p>
+            <p>📞 Contact: <a href="tel:+917908750746">+91 7908750746</a></p>
+            <p><a href="#"><i class="fas fa-file-contract"></i> Terms & Conditions</a></p>
+
+            <div class="social-icons">
+                <a href="https://wa.me/7037796470" target="_blank"><i class="fab fa-whatsapp"></i></a>
+                <a href="https://instagram.com/" target="_blank"><i class="fab fa-instagram"></i></a>
+                <a href="https://linkedin.com/" target="_blank"><i class="fab fa-linkedin"></i></a>
+            </div>
+        </div>
     </footer>
 
     <script>

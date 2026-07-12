@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Login - StellarMind Prod{% endblock %}
+{% block title %}Login - StellarMinds{% endblock %}
 
 {% block head %}
     {{ super() }} <!-- Include base styles from layout.html -->
@@ -220,12 +220,12 @@
     <div class="logo">
         <!-- Corrected path to use Flask's static folder -->
         <img src="{{ url_for('static', filename='images/ttlogo.jpg') }}" 
-             alt="Stellar Mind Logo"
+             alt="StellarMinds Logo"
              onerror="this.onerror=null; this.src='https://placehold.co/80x80/4a90e2/ffffff?text=SM';">
     </div>
     
     <h1><i class="fa-solid fa-user-secret"></i> Welcome Back</h1>
-    <p class="subtitle">Login to explore your Stellar Mind</p>
+    <p class="subtitle">Login to explore StellarMinds</p>
 
     <!-- Updated form to submit to Flask backend -->
     <form method="POST" action="{{ url_for('login_page') }}" autocomplete="off">

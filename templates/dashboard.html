@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
-    <title>Stellar Mind Dashboard</title>
+    <title>StellarMinds Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -908,7 +908,7 @@
                      onerror="this.onerror=null; this.src='https://placehold.co/60x60/f0f4f8/1c2b3a?text=NIT';">
                 <img class="logo-image back animated-logo" 
                      src="{{ url_for('static', filename='images/ttlogo.jpg') }}" 
-                     alt="Stellar Mind Logo"
+                     alt="StellarMinds Logo"
                      onerror="this.onerror=null; this.src='https://placehold.co/60x60/4299e1/ffffff?text=SM';">
             </div>
             <span id="logo-name" class="logo-name"></span>
@@ -999,7 +999,7 @@
 
     <section class="hero">
         <div class="hero-text fade-in">
-            <h1>Welcome to <span class="brand-gradient">Stellar Mind</span></h1>
+            <h1>Welcome to <span class="brand-gradient">StellarMinds</span></h1>
             <h1>Hello, <span class="brand-gradient">{{ session.user.student_name or session.user.teacher_name or session.user.username }}</span>
                 {% if session.user.role == 'student' %}
                     <span class="role-badge {{ session.user.batch if session.user.batch in STUDENT_TABLES else 'alumni' }}">
@@ -1022,7 +1022,7 @@
                 <p>SM</p>
             </div>
             <div class="mobile-logo mobile-only">
-                <img src="{{ url_for('static', filename='images/ttlogo.jpg') }}" alt="Stellar Mind Logo" class="glow-logo"
+                <img src="{{ url_for('static', filename='images/ttlogo.jpg') }}" alt="StellarMinds Logo" class="glow-logo"
                      onerror="this.onerror=null; this.src='https://placehold.co/200x200/4299e1/ffffff?text=SM';">
             </div>
         </div>
@@ -1098,7 +1098,7 @@
 
     <footer class="footer">
         <div class="footer-content">
-            <p>© {{ now.year }} Stellar Mind | NIT Sikkim</p> <!-- Use 'now' from layout -->
+            <p>© {{ now.year }} StellarMinds | NIT Sikkim</p> <!-- Use 'now' from layout -->
             <p>📞 Contact: <a href="tel:+917908750746">+91 7908750746</a></p>
             <p><a href="#"><i class="fas fa-file-contract"></i> Terms & Conditions</a></p>
 
@@ -1154,7 +1154,7 @@
             // Logo Flipper Animation
             const logoFlipper = document.getElementById('logo-flipper');
             const logoNameSpan = document.getElementById('logo-name');
-            const logoNames = ['NIT Sikkim', 'Stellar Mind'];
+            const logoNames = ['NIT Sikkim', 'StellarMinds'];
             let currentNameIndex = 0;
 
             if (logoFlipper && logoNameSpan) {
