@@ -51,13 +51,17 @@
             background-color: #ffffff;
             padding: 0.75rem 1.5rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            /* Removed margin-bottom */
+            gap: 1rem;
+            position: relative;
+            flex-wrap: nowrap;
         }
 
         .logo-container {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            flex-shrink: 0; /* logo is never squeezed by long nav content */
+            min-width: 0;
         }
 
         .logo-img {
@@ -65,21 +69,43 @@
             width: 40px;
             border-radius: 50%;
             object-fit: cover;
+            flex-shrink: 0;
         }
 
         .logo-name {
             font-size: 1.2rem;
             font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Hamburger toggle (shown on mobile only) */
+        .nav-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            color: #1c2b3a;
+            cursor: pointer;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            line-height: 1;
+        }
+
+        .nav-toggle:hover {
+            background-color: #eaf1f7;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.6rem;
             list-style: none;
             padding: 0;
             margin: 0;
-            flex-wrap: wrap; /* allow wrapping on small screens */
+            flex-wrap: wrap; /* graceful wrap before the mobile breakpoint */
+            justify-content: flex-end;
         }
 
         /* Added list-style etc */
@@ -90,31 +116,37 @@
         .nav-links a {
             color: #1c2b3a;
             text-decoration: none;
-            padding: 0.5rem;
-            transition: color 0.3s ease;
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+            transition: color 0.2s ease, background-color 0.2s ease;
             display: inline-flex;
             align-items: center;
-            gap: 0.3rem;
+            gap: 0.35rem;
+            white-space: nowrap; /* keep each link label on a single line */
         }
 
         .nav-links a:hover {
-            color: #007bff;
+            color: #0087c5;
+            background-color: #eaf1f7;
         }
 
         .nav-links i {
-            margin-right: 0.25rem;
+            margin-right: 0.15rem;
         }
 
         .user-greeting {
-            color: #555;
-            margin-right: 0.5rem;
+            color: #1c2b3a;
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 150px;
+            max-width: 180px; /* long names truncate instead of stretching the bar */
             display: inline-block;
             vertical-align: middle;
+            background-color: #eaf1f7;
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.9rem;
         }
 
         /* Footer */
@@ -258,20 +290,41 @@
         /* Responsive */
         @media (max-width: 768px) {
             .navbar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .nav-links {
-                margin-top: 0.5rem;
-                width: 100%;
-                justify-content: space-between;
                 flex-wrap: wrap;
             }
 
-            /* Allow wrapping */
+            .nav-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .nav-links {
+                display: none; /* collapsed by default on mobile */
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                margin-top: 0.75rem;
+                gap: 0.25rem;
+            }
+
+            .nav-links.open {
+                display: flex; /* expanded when hamburger is tapped */
+            }
+
+            .nav-links li {
+                width: 100%;
+            }
+
+            .nav-links a {
+                width: 100%;
+                padding: 0.75rem 0.6rem;
+            }
+
             .user-greeting {
-                max-width: 100px;
+                max-width: 100%;
+                width: 100%;
+                text-align: center;
             }
 
             /* Adjust greeting width */
@@ -407,7 +460,11 @@
                 onerror="this.onerror=null; this.src='https://placehold.co/40x40/0d6efd/ffffff?text=SM';">
             <span class="logo-name">StellarMinds</span>
         </div>
-        <ul class="nav-links"> {# Changed div to ul for semantic correctness #}
+        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu"
+            aria-expanded="false" aria-controls="nav-links">
+            <i class="fas fa-bars"></i>
+        </button>
+        <ul class="nav-links" id="nav-links"> {# Changed div to ul for semantic correctness #}
             {% if session.user %}
             <li><span class="user-greeting">Hello, {{ (session.user.get('student_name') or
                     session.user.get('teacher_name') or session.user.username)|truncate(20) }}!</span></li>
@@ -489,6 +546,16 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // Mobile navigation toggle (runs on every page, even without a bell)
+            const navToggle = document.getElementById('nav-toggle');
+            const navLinks = document.getElementById('nav-links');
+            if (navToggle && navLinks) {
+                navToggle.addEventListener('click', function () {
+                    const isOpen = navLinks.classList.toggle('open');
+                    navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                });
+            }
+
             const bell = document.getElementById('notification-bell');
             const dropdown = document.getElementById('notification-dropdown');
             const badge = document.getElementById('notification-badge');
