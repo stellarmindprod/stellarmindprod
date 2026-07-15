@@ -60,7 +60,8 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            flex-shrink: 0; /* logo is never squeezed by long nav content */
+            flex-shrink: 0;
+            /* logo is never squeezed by long nav content */
             min-width: 0;
         }
 
@@ -104,15 +105,18 @@
             list-style: none;
             padding: 0;
             margin: 0;
-            flex-wrap: wrap; /* graceful wrap before the mobile breakpoint */
+            flex-wrap: wrap;
+            /* graceful wrap before the mobile breakpoint */
             justify-content: flex-end;
         }
 
         /* Added list-style etc */
         .nav-links li {
             display: inline-flex;
-            min-width: 0; /* flex shrinking fix */
+            min-width: 0;
+            /* flex shrinking fix */
         }
+
         .nav-links a {
             color: #1c2b3a;
             text-decoration: none;
@@ -122,7 +126,8 @@
             display: inline-flex;
             align-items: center;
             gap: 0.35rem;
-            white-space: nowrap; /* keep each link label on a single line */
+            white-space: nowrap;
+            /* keep each link label on a single line */
         }
 
         .nav-links a:hover {
@@ -140,7 +145,8 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 180px; /* long names truncate instead of stretching the bar */
+            max-width: 180px;
+            /* long names truncate instead of stretching the bar */
             display: inline-block;
             vertical-align: middle;
             background-color: #eaf1f7;
@@ -156,7 +162,7 @@
             text-align: center;
             padding: 2rem 1rem;
             margin-top: auto;
-            border-top: 1px solid rgba(0,0,0,0.05);
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
             box-shadow: 0 -2px 10px var(--shadow-light);
         }
 
@@ -300,7 +306,8 @@
             }
 
             .nav-links {
-                display: none; /* collapsed by default on mobile */
+                display: none;
+                /* collapsed by default on mobile */
                 flex-direction: column;
                 align-items: stretch;
                 width: 100%;
@@ -309,7 +316,8 @@
             }
 
             .nav-links.open {
-                display: flex; /* expanded when hamburger is tapped */
+                display: flex;
+                /* expanded when hamburger is tapped */
             }
 
             .nav-links li {
@@ -460,8 +468,8 @@
                 onerror="this.onerror=null; this.src='https://placehold.co/40x40/0d6efd/ffffff?text=SM';">
             <span class="logo-name">StellarMinds</span>
         </div>
-        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu"
-            aria-expanded="false" aria-controls="nav-links">
+        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false"
+            aria-controls="nav-links">
             <i class="fas fa-bars"></i>
         </button>
         <ul class="nav-links" id="nav-links"> {# Changed div to ul for semantic correctness #}
@@ -508,6 +516,9 @@
                     Upload Certificate</a></li>
             {% endif %}
 
+            <li><a href="javascript:void(0);" onclick="document.getElementById('chatbot-container').style.display='flex'; document.getElementById('chatbot-question').focus();" style="color: var(--accent-start); font-weight: bold;"><i
+                        class="fas fa-robot"></i> AI Helper</a></li>
+
             <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             {% else %}
             <li><a href="{{ url_for('login_page') }}"><i class="fas fa-sign-in-alt"></i> Login</a></li>
@@ -543,6 +554,8 @@
             </div>
         </div>
     </footer>
+    
+    {% include 'chatbot.html' %}
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
