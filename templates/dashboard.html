@@ -929,7 +929,7 @@
                     <a href="{{ url_for('student_attendance_page') }}" id="attendance-link"><i class="fas fa-user-check"></i> Attendance</a>
                 {% endif %}
             </li>
-            <li><a href="javascript:void(0);" onclick="document.getElementById('chatbot-container').style.display='flex'; document.getElementById('chatbot-question').focus();"><i class="fas fa-robot"></i> AI HELPER</a></li>
+            <li><a href="{{ url_for('ai_helper_page') }}"><i class="fas fa-robot"></i> AI HELPER</a></li>
             <li>
                 {% if session.user.role == "admin" %}
                     <a href="{{ url_for('admin_enter_marks_page') }}" id="marks-link"><i class="fas fa-clipboard"></i> Marks</a>
@@ -1290,6 +1290,5 @@
             }
         });
     </script>
-    {% include 'chatbot.html' %}
 </body>
 </html>

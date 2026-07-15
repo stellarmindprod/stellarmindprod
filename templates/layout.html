@@ -516,7 +516,7 @@
                     Upload Certificate</a></li>
             {% endif %}
 
-            <li><a href="javascript:void(0);" onclick="document.getElementById('chatbot-container').style.display='flex'; document.getElementById('chatbot-question').focus();" style="color: var(--accent-start); font-weight: bold;"><i
+            <li><a href="{{ url_for('ai_helper_page') }}" style="color: var(--accent-start); font-weight: bold;"><i
                         class="fas fa-robot"></i> AI Helper</a></li>
 
             <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -554,8 +554,6 @@
             </div>
         </div>
     </footer>
-    
-    {% include 'chatbot.html' %}
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {

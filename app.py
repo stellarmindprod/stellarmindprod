@@ -3066,6 +3066,12 @@ def api_update_gatepass():
     except: return jsonify({"success": False}), 500
 
 
+# --- AI Helper (Chatbot) ---
+@app.route('/ai-helper')
+@login_required()
+def ai_helper_page():
+    return render_template('chatbot_page.html', user=session.get('user'))
+
 # --- Error Handling ---
 @app.errorhandler(404)
 def page_not_found(e):
